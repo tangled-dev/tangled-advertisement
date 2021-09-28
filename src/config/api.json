@@ -1,0 +1,31 @@
+{
+  "endpoint_list": [
+    {
+      "id": "0QJZ31dutPTSexxZ",
+      "name": "api_version",
+      "description": "returns the api version",
+      "method": "GET",
+      "version_released": "1.0.0",
+      "permission": "{\"require_identity\": false, \"private\": false}",
+      "enable": true
+    },
+    {
+      "id": "nrfuxmNtoxcec3KS",
+      "name": "advertisement_create_random",
+      "description": "creates and returns a random advertisement",
+      "method": "GET",
+      "version_released": "1.0.0",
+      "permission": "{\"require_identity\": false, \"private\": false}",
+      "enable": true
+    },
+    {
+      "id": "LMCqwVXTLS7VRWPT",
+      "name": "get_next_consumer_advertisement_render",
+      "description": "returns the advertisement that should be rendered",
+      "method": "GET",
+      "version_released": "1.0.0",
+      "permission": "{\"require_identity\": false, \"private\": false}",
+      "enable": true
+    }
+  ]
+}
