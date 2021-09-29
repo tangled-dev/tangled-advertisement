@@ -10,6 +10,34 @@ export default class Advertiser {
         this.normalizationRepository = repository;
     }
 
+    listCategory(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_advertiser.advertisement_category_type', where);
+            this.database.all(sql, parameters, (err, data) => {
+                if(err){
+                    return reject(err);
+                }
+
+                if(data.length === 0 ){
+                    return resolve(data);
+                }
+
+                const categories = {};
+                data.forEach(category => {
+                    categories[category.advertisement_category_type_guid] = {
+                        ...category
+                    };
+                });
+
+                resolve(_.values(categories));
+            })
+        })
+
+    }
+
     getAdvertisement(consumerGUID) {
         return new Promise((resolve, reject) => {
             this.database.all(`SELECT *
