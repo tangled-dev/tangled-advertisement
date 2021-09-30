@@ -11,6 +11,7 @@ export const NODE_NAT_PMP                = true;
 export const WEBSOCKET_PROTOCOL          = 'ws://';
 export const NETWORK_LONG_TIME_WAIT_MAX  = 3000;
 export const NETWORK_SHORT_TIME_WAIT_MAX = 1500;
+export const MILLIX_USD_VALUE            = 100000000 / 12; //TODO: get this from an external api like fiatleak
 
 export const NODE_INITIAL_LIST         = [
     {
@@ -43,6 +44,7 @@ export default {
     VERSION,
     NODE_KEY_PATH,
     DATABASE_ENGINE,
+    MILLIX_USD_VALUE,
     NODE_CERTIFICATE_PATH,
     NODE_CERTIFICATE_KEY_PATH,
     NETWORK_SHORT_TIME_WAIT_MAX,

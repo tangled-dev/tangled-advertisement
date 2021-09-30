@@ -1,6 +1,7 @@
 import Endpoint from '../endpoint';
 import database, {Database} from '../../database/database';
 import _ from 'lodash';
+import config, {MILLIX_USD_VALUE} from '../../config/config';
 
 
 /**
@@ -79,9 +80,9 @@ class _nrfuxmNtoxcec3KS extends Endpoint {
             const name                      = `${advertisementCategory} - ${url}`;
             const fundingAddress            = `${this.protocolAddressKeyIdentifier}0a0${this.protocolAddressKeyIdentifier}`;
             const budgetUSD                 = Math.floor(Math.max(100, Math.random() * 1000));
-            const budgetMLX                 = Math.floor(budgetUSD * 100000000 / 12);
+            const budgetMLX                 = Math.floor(budgetUSD * config.MILLIX_USD_VALUE);
             const bidImpressionUSD          = Math.max(0.1, Math.random()).toFixed(2);
-            const bidImpressionMLX          = Math.floor(bidImpressionUSD * 100000000 / 12);
+            const bidImpressionMLX          = Math.floor(bidImpressionUSD * config.MILLIX_USD_VALUE);
             const expiration                = Math.floor(Math.random() * 10) * 86400;
             const headLineAttributeGUID     = Database.generateID(32);
             const targetPhraseAttributeGUID = Database.generateID(32);
