@@ -11,6 +11,7 @@ export const NODE_NAT_PMP                = true;
 export const WEBSOCKET_PROTOCOL          = 'ws://';
 export const NETWORK_LONG_TIME_WAIT_MAX  = 3000;
 export const NETWORK_SHORT_TIME_WAIT_MAX = 1500;
+export const MILLIX_USD_VALUE            = 100000000 / 12; //TODO: get this from an external api like fiatleak
 
 export const NODE_INITIAL_LIST         = [
     {
@@ -34,7 +35,7 @@ if (DATABASE_ENGINE === 'sqlite') {
     DATABASE_CONNECTION.FILENAME_ADVERTISER_ADVERTISEMENT = 'tangled-advertisement-advertiser.sqlite';
     DATABASE_CONNECTION.FILENAME_CONSUMER_ADVERTISEMENT   = 'tangled-advertisement-consumer.sqlite';
     DATABASE_CONNECTION.FILENAME_MILLIX_NODE              = 'millix.sqlite';
-    DATABASE_CONNECTION.SCHEMA_VERSION                    = '1';
+    DATABASE_CONNECTION.SCHEMA_VERSION                    = '2';
 }
 
 export default {
@@ -43,6 +44,7 @@ export default {
     VERSION,
     NODE_KEY_PATH,
     DATABASE_ENGINE,
+    MILLIX_USD_VALUE,
     NODE_CERTIFICATE_PATH,
     NODE_CERTIFICATE_KEY_PATH,
     NETWORK_SHORT_TIME_WAIT_MAX,
