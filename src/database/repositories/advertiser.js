@@ -1,4 +1,5 @@
 import {Database} from '../database';
+import config from '../../config/config';
 
 export default class Advertiser {
     constructor(database) {
@@ -10,7 +11,7 @@ export default class Advertiser {
         this.normalizationRepository = repository;
     }
 
-    getAdvertisement(consumerGUID) {
+    syncAdvertisementToConsumer(consumerGUID) {
         return new Promise((resolve, reject) => {
             this.database.all(`SELECT *
                                FROM advertisement_advertiser.advertisement
@@ -164,5 +165,61 @@ export default class Advertiser {
                        expiration,
                        attributes
                    }));
+    }
+
+    logAdvertisementClick(guid, requestGUID, consumerGUID, protocolAddressKeyIdentifier, ipAddress, expiration) {
+        return new Promise((resolve, reject) => {
+            this.database.run(`INSERT INTO advertisement_advertiser.advertisement_click_log
+                               (log_guid, advertisement_guid,
+                                advertisement_request_guid,
+                                tangled_guid_consumer,
+                                protocol_address_key_identifier,
+                                ip_address_consumer, expiration)
+                               VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+                Database.generateID(32),
+                guid,
+                requestGUID,
+                consumerGUID,
+                protocolAddressKeyIdentifier,
+                ipAddress,
+                expiration
+            ], (err) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve();
+            });
+        });
+    }
+
+
+    getAdvertisement(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_advertiser.advertisement', where);
+            this.database.get(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve(data);
+            });
+        });
+    }
+
+    getAdvertisementRequestLog(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_advertiser.advertisement_request_log', where);
+            this.database.get(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve(data);
+            });
+        });
     }
 }

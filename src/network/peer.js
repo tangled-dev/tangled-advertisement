@@ -66,7 +66,7 @@ export class Peer {
         this.propagateRequestAdvertisement(data, ws);
 
         const advertiserRepository = database.getRepository('advertiser');
-        advertiserRepository.getAdvertisement(data.node_id)
+        advertiserRepository.syncAdvertisementToConsumer(data.node_id)
                             .then(advertisements => {
                                 console.log(`[peer] found ${advertisements.length} new advertisements to peer ${data.node_id}`);
                                 if (advertisements.length === 0) {

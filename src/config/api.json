@@ -26,6 +26,15 @@
       "version_released": "1.0.0",
       "permission": "{\"require_identity\": false, \"private\": false}",
       "enable": true
+    },
+    {
+      "id": "JPMvLLnqBYtadpH2",
+      "name": "log_advertisement_click",
+      "description": "logs a click on a specific advertisement",
+      "method": "GET",
+      "version_released": "1.0.0",
+      "permission": "{\"require_identity\": false, \"private\": false}",
+      "enable": true
     }
   ]
 }
