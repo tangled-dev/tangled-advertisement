@@ -1,5 +1,5 @@
 import config from '../config/config';
-import {Advertiser, API, Consumer, Schema, Node, Normalization, Keychain, Wallet} from './repositories/repositories';
+import {Advertiser, API, Consumer, Keychain, Language, Node, Normalization, Schema, Wallet} from './repositories/repositories';
 import mutex from '../core/mutex';
 import eventBus from '../core/event-bus';
 import fs from 'fs';
@@ -366,16 +366,18 @@ export class Database {
     _initializeTables() {
         this.repositories['normalization'] = new Normalization(this.database);
         this.repositories['api']           = new API(this.database);
-        this.repositories['keychain'] = new Keychain(this.database);
-        this.repositories['wallet'] = new Wallet(this.database);
+        this.repositories['keychain']      = new Keychain(this.database);
+        this.repositories['wallet']        = new Wallet(this.database);
 
-        this.repositories['node']          = new Node(this.database);
+        this.repositories['node'] = new Node(this.database);
         this.repositories['node'].setNormalizationRepository(this.repositories['normalization']);
 
         this.repositories['advertiser'] = new Advertiser(this.database);
         this.repositories['advertiser'].setNormalizationRepository(this.repositories['normalization']);
 
-        this.repositories['consumer']      = new Consumer(this.database);
+        this.repositories['language'] = new Language(this.database);
+
+        this.repositories['consumer'] = new Consumer(this.database);
         this.repositories['consumer'].setNormalizationRepository(this.repositories['normalization']);
         return this.repositories['normalization'].load();
     }
