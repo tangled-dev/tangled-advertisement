@@ -20,9 +20,9 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
      */
     handler(app, req, res) {
         const {
-                  p0: stringified_payload
+                  p0
               }       = req.query;
-        const payload = JSON.parse(stringified_payload);
+        const payload = JSON.parse(p0);
 
         if (
             !payload.creative_name ||
