@@ -74,10 +74,10 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
             const budgetUSD        = Math.floor(Math.max(100, Math.random() * 1000));
             const bidImpressionUSD = Math.max(0.1, Math.random()).toFixed(2);
 
-            const targetLanguage = languageRepository
+            return languageRepository
                 .getLanguageByGuid(payload.target_language)
                 .then((languageData) => {
-                    const advertisementCategory = advertiserRepository.getCategoryByGuid(payload.category).then(categoryData => {
+                    return advertiserRepository.getCategoryByGuid(payload.category).then(categoryData => {
                         const advertisementAttributes = [
                             {
                                 attribute_guid: headLineAttributeGUID,
@@ -102,7 +102,7 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
                             }
                         ];
 
-                        advertiserRepository.createAdvertisement(
+                        return advertiserRepository.createAdvertisement(
                             advertisementGUID,
                             advertisementType,
                             categoryData.advertisement_category_type,
@@ -118,12 +118,7 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
                         ).then(advertisement => res.send({
                             api_status   : 'ok',
                             advertisement: advertisement
-                        }))
-                                            .catch(e => res.send({
-                                                api_status : 'fail',
-                                                api_message: `unexpected generic api error: (${e})`
-                                            }));
-
+                        }));
 
                     });
 
