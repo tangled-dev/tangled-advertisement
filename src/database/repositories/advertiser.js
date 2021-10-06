@@ -36,7 +36,26 @@ export default class Advertiser {
                 resolve(_.values(categories));
             })
         })
+    }
 
+    getCategoryByGuid(categoryGuid) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_category_type', {advertisement_category_type_guid: categoryGuid});
+            this.database.get(sql, parameters, (err, data) => {
+                if(err){
+                    return reject(err);
+                }
+
+                if(data.length === 0 ){
+                    return resolve(data);
+                }
+
+                resolve(data);
+            })
+        })
     }
 
     syncAdvertisementToConsumer(consumerGUID) {

@@ -53,6 +53,15 @@
       "version_released": "1.0.0",
       "permission": "{\"require_identity\": false, \"private\": false}",
       "enable": true
+    },
+    {
+      "id": "scWZ0yhuk5hHLd8s",
+      "name": "create_ad",
+      "description": "create ad with given params",
+      "method": "GET",
+      "version_released": "1.0.0",
+      "permission": "{\"require_identity\": false, \"private\": false}",
+      "enable": true
     }
   ]
 }
