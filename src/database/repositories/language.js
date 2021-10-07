@@ -33,23 +33,22 @@ export default class Language {
         });
     }
 
-    getLanguageByGuid(language_guid) {
+    getLanguage(where) {
         return new Promise((resolve, reject) => {
             const {
                       sql,
                       parameters
-                  } = Database.buildQuery('SELECT * FROM language', {language_guid: language_guid});
+                  } = Database.buildQuery('SELECT * FROM language', where);
             this.database.get(sql, parameters, (err, data) => {
                 if (err) {
                     return reject(err.message);
                 }
 
-                if (data.length === 0) {
-                    return resolve(data);
-                }
-
                 resolve(data);
             });
         });
+    }
+    getLanguageByGuid(languageGuid) {
+        return this.getLanguage({language_guid: languageGuid});
     }
 }

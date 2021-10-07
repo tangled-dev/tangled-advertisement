@@ -38,24 +38,24 @@ export default class Advertiser {
         })
     }
 
-    getCategoryByGuid(categoryGuid) {
+    getCategory(where) {
         return new Promise((resolve, reject) => {
             const {
                       sql,
                       parameters
-                  } = Database.buildQuery('SELECT * FROM advertisement_category_type', {advertisement_category_type_guid: categoryGuid});
+                  } = Database.buildQuery('SELECT * FROM advertisement_category_type', where);
             this.database.get(sql, parameters, (err, data) => {
                 if(err){
                     return reject(err);
                 }
 
-                if(data.length === 0 ){
-                    return resolve(data);
-                }
-
                 resolve(data);
             })
         })
+    }
+
+    getCategoryByGuid(categoryGuid) {
+        return this.getCategory({advertisement_category_type_guid: categoryGuid});
     }
 
     syncAdvertisementToConsumer(consumerGUID) {
