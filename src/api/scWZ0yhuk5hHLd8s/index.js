@@ -117,6 +117,7 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
                             advertisementAttributes
                         ).then(advertisement => res.send({
                             api_status   : 'ok',
+                            api_message: 'created successfully',
                             advertisement: advertisement
                         }));
 
