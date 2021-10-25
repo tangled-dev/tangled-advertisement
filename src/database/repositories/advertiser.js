@@ -16,7 +16,7 @@ export default class Advertiser {
             const {
                       sql,
                       parameters
-                  } = Database.buildQuery('SELECT * FROM advertisement_advertiser.advertisement_category_type', where);
+                  } = Database.buildQuery('SELECT * FROM advertisement_advertiser.advertisement_category', where);
             this.database.all(sql, parameters, (err, data) => {
                 if(err){
                     return reject(err);
@@ -28,7 +28,7 @@ export default class Advertiser {
 
                 const categories = {};
                 data.forEach(category => {
-                    categories[category.advertisement_category_type_guid] = {
+                    categories[category.advertisement_category_guid] = {
                         ...category
                     };
                 });
@@ -43,7 +43,7 @@ export default class Advertiser {
             const {
                       sql,
                       parameters
-                  } = Database.buildQuery('SELECT * FROM advertisement_category_type', where);
+                  } = Database.buildQuery('SELECT * FROM advertisement_category', where);
             this.database.get(sql, parameters, (err, data) => {
                 if(err){
                     return reject(err);
@@ -55,7 +55,7 @@ export default class Advertiser {
     }
 
     getCategoryByGuid(categoryGuid) {
-        return this.getCategory({advertisement_category_type_guid: categoryGuid});
+        return this.getCategory({advertisement_category_guid: categoryGuid});
     }
 
     syncAdvertisementToConsumer(consumerGUID) {
@@ -77,18 +77,18 @@ export default class Advertiser {
                 const advertisements = {};
                 data.forEach(advertisement => {
                     advertisements[advertisement.advertisement_guid] = {
-                        advertisement_guid         : advertisement.advertisement_guid,
-                        advertisement_type         : this.normalizationRepository.getType(advertisement.advertisement_type_guid),
-                        advertisement_category_type: this.normalizationRepository.getType(advertisement.advertisement_category_type_guid),
-                        advertisement_name         : advertisement.advertisement_name,
-                        advertisement_url          : advertisement.advertisement_url,
-                        protocol_address_funding   : advertisement.protocol_address_funding,
-                        budget_daily_usd           : advertisement.budget_daily_usd,
-                        budget_daily_mlx           : advertisement.budget_daily_mlx,
-                        bid_impression_usd         : advertisement.bid_impression_usd,
-                        bid_impression_mlx         : advertisement.bid_impression_mlx,
-                        expiration                 : advertisement.expiration,
-                        attributes                 : []
+                        advertisement_guid      : advertisement.advertisement_guid,
+                        advertisement_type      : this.normalizationRepository.getType(advertisement.advertisement_type_guid),
+                        advertisement_category  : this.normalizationRepository.getType(advertisement.advertisement_category_guid),
+                        advertisement_name      : advertisement.advertisement_name,
+                        advertisement_url       : advertisement.advertisement_url,
+                        protocol_address_funding: advertisement.protocol_address_funding,
+                        budget_daily_usd        : advertisement.budget_daily_usd,
+                        budget_daily_mlx        : advertisement.budget_daily_mlx,
+                        bid_impression_usd      : advertisement.bid_impression_usd,
+                        bid_impression_mlx      : advertisement.bid_impression_mlx,
+                        expiration              : advertisement.expiration,
+                        attributes              : []
                     };
                 });
 
@@ -154,7 +154,7 @@ export default class Advertiser {
             [
                 `INSERT INTO advertisement_advertiser.advertisement (advertisement_guid,
                                                                      advertisement_type_guid,
-                                                                     advertisement_category_type_guid,
+                                                                     advertisement_category_guid,
                                                                      advertisement_name,
                                                                      advertisement_url,
                                                                      protocol_address_funding,
@@ -199,16 +199,16 @@ export default class Advertiser {
 
         return this.database.runBatchAsync(statements)
                    .then(() => ({
-                       advertisement_guid         : guid,
-                       advertisement_type         : type,
-                       advertisement_category_type: category,
-                       advertisement_name         : name,
-                       advertisement_url          : url,
-                       protocol_address_funding   : fundingAddress,
-                       budget_daily_usd           : budgetUSD,
-                       budget_daily_mlx           : budgetMLX,
-                       bid_impression_usd         : bidImpressionUSD,
-                       bid_impression_mlx         : bidImpressionMLX,
+                       advertisement_guid      : guid,
+                       advertisement_type      : type,
+                       advertisement_category  : category,
+                       advertisement_name      : name,
+                       advertisement_url       : url,
+                       protocol_address_funding: fundingAddress,
+                       budget_daily_usd        : budgetUSD,
+                       budget_daily_mlx        : budgetMLX,
+                       bid_impression_usd      : bidImpressionUSD,
+                       bid_impression_mlx      : bidImpressionMLX,
                        expiration,
                        attributes
                    }));

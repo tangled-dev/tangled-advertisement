@@ -105,7 +105,7 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
                         return advertiserRepository.createAdvertisement(
                             advertisementGUID,
                             advertisementType,
-                            categoryData.advertisement_category_type,
+                            categoryData.advertisement_category,
                             payload.creative_name,
                             payload.url,
                             fundingAddress,

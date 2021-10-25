@@ -114,6 +114,6 @@ INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('techn
 INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('technology - phone', 'NQ2JTh96P');
 INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('technology - service', '884LpvLlG');
 
-INSERT INTO schema_information (key, value) VALUES ("version", "1");
+INSERT INTO schema_information (key, value) VALUES ("version", "3");
 
 COMMIT;

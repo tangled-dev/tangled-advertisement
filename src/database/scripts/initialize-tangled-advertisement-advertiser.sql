@@ -7,7 +7,7 @@ CREATE TABLE advertisement
     advertisement_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     advertisement_guid char(32) UNIQUE,
     advertisement_type_guid char(32),
-    advertisement_category_type_guid char(32),
+    advertisement_category_guid char(32),
     advertisement_name varchar(200),
     advertisement_url varchar(2048),
     protocol_address_funding char(128),
@@ -242,7 +242,7 @@ CREATE TABLE advertisement_block_log
     country_guid char(32),
     region_guid char(32),
     city_guid char(32),
-    object_guid char(32), -- (tangled_guid_advertiser, advertiser_ip_address, advertisement_domain, advertisement_category_type_guid)
+    object_guid char(32), -- (tangled_guid_advertiser, advertiser_ip_address, advertisement_domain, advertisement_category_guid)
     object_key char(32), -- (contain a record identifier associated with any object)
     expiration timestamp,
     status smallint NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
@@ -268,7 +268,7 @@ INSERT INTO block_type (block_type_guid, block_type) VALUES  ('Xf5BaLUDd', 'doma
 INSERT INTO block_type (block_type_guid, block_type) VALUES  ('f7uTD9wx0', 'offensive content');
 INSERT INTO block_type (block_type_guid, block_type) VALUES  ('QuAHfUj96', 'distracting content');
 
--- advertisement_category_type
+-- advertisement_category
 -- lookup table with broad categories of industry and sub categories represented with the parent field.
 -- tangled.com will maintain a master table which nodes should poll regularly.
 -- the categories are loose enough for every ad to have an assignment
@@ -290,50 +290,50 @@ INSERT INTO block_type (block_type_guid, block_type) VALUES  ('QuAHfUj96', 'dist
 -- technology, technology - phone, technology - service
 -- etc
 
-CREATE TABLE advertisement_category_type
+CREATE TABLE advertisement_category
 (
-    advertisement_category_type_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-    advertisement_category_type_guid char(32) UNIQUE,
-    advertisement_category_type_guid_parent char(32),
-    advertisement_category_type varchar(200),
+    advertisement_category_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    advertisement_category_guid char(32) UNIQUE,
+    advertisement_category_guid_parent char(32),
+    advertisement_category varchar(200),
     phrase_guid char(32),
     require_opt_in tinyint NOT NULL DEFAULT 0 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
     status smallint NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
 );
 
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('automotive', 'wlgaQIpo5', NULL); /*advertisement_category_type*/
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('automotive - insurance', 'rZ3TS5d1j', 'wlgaQIpo5');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('automotive - loan', 'mgNNklCb2', 'wlgaQIpo5');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('travel', 'L9308amjm', NULL);
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('coupons', 'U7sXdimXu', NULL);
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('drug & alcohol', 'gSgf37DFT', NULL);
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('education', 'lA2MnMRwk', NULL);
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('entertainment', 'j4b7ndu8h', NULL);
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('entertainment - gaming', 'OGMfSgRcx', 'j4b7ndu8h');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('food & beverage', 'XB6szJFk5', NULL);
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('finance', 'by82Ao3dW', NULL);
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('finance - credit card', '4mKt8VOzO', 'by82Ao3dW');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('finance - loan', 'GsR6Ghxnz', 'by82Ao3dW');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('finance - cryptocurrency', 'b5F6bDx0k', 'by82Ao3dW');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('fashion', '2nLHWSLR9', NULL);
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('fashion - men', '4MAQtMyn0', '2nLHWSLR9');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('fashion - women', 'an4sRQjSv', '2nLHWSLR9');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('fashion - children', 'KQNQkOt3K', '2nLHWSLR9');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('health', '0REKO74dR', NULL);
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('health - weight loss', 'JQWEIhrya', '0REKO74dR');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('health - fitness', 'CSg5eUZnd', '0REKO74dR');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('home', 'kBDMGx9yw', NULL);
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('home - decoration', '3VDf1lOBi', 'kBDMGx9yw');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('home - insurance', 'KW00VaYCl', 'kBDMGx9yw');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('home - loan', 'nIfqZDnml', 'kBDMGx9yw');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('home - rental', '1NnQO0zkG', 'kBDMGx9yw');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('pets', 'Wg9ETN4rx', NULL);
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('relationship', 'Bj8yHWu2U', NULL);
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('relationship - women seeking men', 'e4Dyay9eV', 'Bj8yHWu2U');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('relationship - men seeking women', 'pOLNT9oKD', 'Bj8yHWu2U');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('technology', 'TQPs3dfZt', NULL);
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('technology - phone', 'NQ2JTh96P', 'TQPs3dfZt');
-INSERT INTO advertisement_category_type (advertisement_category_type, advertisement_category_type_guid, advertisement_category_type_guid_parent) VALUES  ('technology - service', '884LpvLlG', 'TQPs3dfZt');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('automotive', 'wlgaQIpo5', NULL); /*advertisement_category*/
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('automotive - insurance', 'rZ3TS5d1j', 'wlgaQIpo5');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('automotive - loan', 'mgNNklCb2', 'wlgaQIpo5');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('travel', 'L9308amjm', NULL);
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('coupons', 'U7sXdimXu', NULL);
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('drug & alcohol', 'gSgf37DFT', NULL);
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('education', 'lA2MnMRwk', NULL);
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('entertainment', 'j4b7ndu8h', NULL);
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('entertainment - gaming', 'OGMfSgRcx', 'j4b7ndu8h');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('food & beverage', 'XB6szJFk5', NULL);
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('finance', 'by82Ao3dW', NULL);
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('finance - credit card', '4mKt8VOzO', 'by82Ao3dW');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('finance - loan', 'GsR6Ghxnz', 'by82Ao3dW');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('finance - cryptocurrency', 'b5F6bDx0k', 'by82Ao3dW');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('fashion', '2nLHWSLR9', NULL);
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('fashion - men', '4MAQtMyn0', '2nLHWSLR9');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('fashion - women', 'an4sRQjSv', '2nLHWSLR9');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('fashion - children', 'KQNQkOt3K', '2nLHWSLR9');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('health', '0REKO74dR', NULL);
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('health - weight loss', 'JQWEIhrya', '0REKO74dR');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('health - fitness', 'CSg5eUZnd', '0REKO74dR');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('home', 'kBDMGx9yw', NULL);
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('home - decoration', '3VDf1lOBi', 'kBDMGx9yw');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('home - insurance', 'KW00VaYCl', 'kBDMGx9yw');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('home - loan', 'nIfqZDnml', 'kBDMGx9yw');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('home - rental', '1NnQO0zkG', 'kBDMGx9yw');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('pets', 'Wg9ETN4rx', NULL);
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('relationship', 'Bj8yHWu2U', NULL);
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('relationship - women seeking men', 'e4Dyay9eV', 'Bj8yHWu2U');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('relationship - men seeking women', 'pOLNT9oKD', 'Bj8yHWu2U');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('technology', 'TQPs3dfZt', NULL);
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('technology - phone', 'NQ2JTh96P', 'TQPs3dfZt');
+INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('technology - service', '884LpvLlG', 'TQPs3dfZt');
 
 COMMIT;
