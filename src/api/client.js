@@ -3,7 +3,7 @@ import https from 'https';
 
 class Client {
     static HOST = 'localhost';
-    static PORT = 5499;
+    static PORT = 5500;
 
     constructor() {
         this.nodeID        = undefined;
