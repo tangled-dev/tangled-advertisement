@@ -48,7 +48,10 @@ CREATE TABLE node
 );
 CREATE INDEX idx_node_create_date ON node (create_date);
 
-
+INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('protocol_transaction_id', '1VESrvDin');/*advertisement ledger attribute*/
+INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('protocol_output_position', 'HaaC5HUYp');
+INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('mlx', 'ytvVWD56H'); /*currency type*/
+INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('usd', '03VWEI5AS');
 INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('deposit:external', 'jJOwx2Mgb'); /*transaction_type*/
 INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('withdrawal:external', 'DnDdawfh8');
 INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('expense:operation:protocol fee', 'I27HitV7P');

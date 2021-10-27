@@ -45,12 +45,10 @@ CREATE TABLE advertisement_attribute
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
 );
 
--- advertisement_attribute_type
-
 -- settlement_ledger
 -- the settlement ledger tracks payments received by the consumer from advertisements.  this can report consumer revenue by date.  it is not a ledger because it doesn't need to track balance or withdrawals.
 
-CREATE TABLE advertisement_attribute_type
+CREATE TABLE settlement_ledger
 (
     ledger_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     ledger_guid char(32) UNIQUE,

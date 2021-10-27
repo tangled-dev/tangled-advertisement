@@ -11,7 +11,11 @@ export const NODE_NAT_PMP                = true;
 export const WEBSOCKET_PROTOCOL          = 'ws://';
 export const NETWORK_LONG_TIME_WAIT_MAX  = 3000;
 export const NETWORK_SHORT_TIME_WAIT_MAX = 1500;
-export const MILLIX_USD_VALUE            = 100000000 / 12; //TODO: get this from an external api like fiatleak
+export const TRANSACTION_ADDRESS_VERSION = 'lal';
+export const TRANSACTION_OUTPUT_MAX      = 128;
+export const TRANSACTION_PROXY_FEE       = 1000;
+export const ADS_TRANSACTION_AMOUNT_MAX  = 9999999;
+export const MILLIX_USD_VALUE            = 100000000 / 12; /*TODO: get this from an external api like fiatleak*/
 
 export const NODE_INITIAL_LIST         = [
     {
@@ -47,8 +51,12 @@ export default {
     MILLIX_USD_VALUE,
     NODE_CERTIFICATE_PATH,
     NODE_CERTIFICATE_KEY_PATH,
+    ADS_TRANSACTION_AMOUNT_MAX,
     NETWORK_SHORT_TIME_WAIT_MAX,
+    TRANSACTION_ADDRESS_VERSION,
     NETWORK_LONG_TIME_WAIT_MAX,
+    TRANSACTION_OUTPUT_MAX,
+    TRANSACTION_PROXY_FEE,
     DATABASE_CONNECTION,
     WEBSOCKET_PROTOCOL,
     NODE_INITIAL_LIST,

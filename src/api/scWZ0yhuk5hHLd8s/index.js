@@ -1,5 +1,6 @@
 import Endpoint from '../endpoint';
 import database, {Database} from '../../database/database';
+import config from '../../config/config';
 
 
 /**
@@ -38,6 +39,12 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
             return res.status(400).send({
                 api_status : 'fail',
                 api_message: `creative_name<creative_name>, category<category_guid>, headline<headline>, target_language<language>, deck<deck>, url<url>, search_phrase<search_phrase>, daily_budget_mlx<daily_budget_mlx>, bid_per_impressions_mlx<bid_per_1k_impressions_mlx>`
+            });
+        }
+        else if (payload.bid_per_impressions_mlx > config.ADS_TRANSACTION_AMOUNT_MAX) {
+            return res.status(400).send({
+                api_status : 'fail',
+                api_message: `bid_per_impressions_mlx (${payload.bid_per_impressions_mlx}) is greater than the maximum allowed value: ${config.ADS_TRANSACTION_AMOUNT_MAX}`
             });
         }
 
@@ -117,7 +124,7 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
                             advertisementAttributes
                         ).then(advertisement => res.send({
                             api_status   : 'ok',
-                            api_message: 'created successfully',
+                            api_message  : 'created successfully',
                             advertisement: advertisement
                         }));
 

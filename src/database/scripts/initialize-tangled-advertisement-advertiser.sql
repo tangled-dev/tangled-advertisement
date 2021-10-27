@@ -155,8 +155,10 @@ CREATE TABLE advertisement_ledger
     withdrawal decimal(32,16),
     price_usd decimal(32,16),
     status smallint NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
-    create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
+    create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer'),
+    UNIQUE(advertisement_guid, advertisement_request_guid, transaction_type_guid)
 );
+CREATE INDEX idx_advertisement_ledger_advertisement_request ON advertisement_ledger ("advertisement_guid", "advertisement_request_guid");
 
 CREATE TABLE advertisement_ledger_attribute
 (
@@ -183,6 +185,9 @@ CREATE TABLE ledger_attribute_type
     status smallint NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
 );
+
+INSERT INTO ledger_attribute_type (attribute_type_guid, attribute_type) VALUES ('1VESrvDin', 'protocol_transaction_id');
+INSERT INTO ledger_attribute_type (attribute_type_guid, attribute_type) VALUES ('HaaC5HUYp', 'protocol_output_position');
 
 -- transaction_type
 -- populate records:

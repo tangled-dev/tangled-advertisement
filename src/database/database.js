@@ -28,13 +28,24 @@ sqlite3.Database.prototype.runBatchAsync = function(statements) {
         ...statements,
         'COMMIT'
     ];
-    return batch.reduce((chain, statement) => chain.then(result => {
-        results.push(result);
-        return this.runAsync(...[].concat(statement));
-    }), Promise.resolve())
-                .catch(err => this.runAsync('ROLLBACK')
-                                  .then(() => Promise.reject(err + ' in statement #' + results.length)))
-                .then(() => results.slice(2));
+    return new Promise((resolve, reject) => {
+        mutex.lock(['transaction'], unlock => {
+            return batch.reduce((chain, statement) => chain.then(result => {
+                results.push(result);
+                return this.runAsync(...[].concat(statement));
+            }), Promise.resolve())
+                        .then(() => {
+                            unlock();
+                            resolve(results.slice(2));
+                        })
+                        .catch(err => this.runAsync('ROLLBACK')
+                                          .then(() => {
+                                              unlock();
+                                              reject(err + ' in statement #' + results.length);
+                                          })
+                        );
+        });
+    });
 };
 
 
@@ -63,13 +74,13 @@ export class Database {
     static buildQuery(sql, where, orderBy, limit, shardID, offset) {
         let parameters = [];
         if (where) {
-            _.each(_.keys(where), key => {
+            _.each(_.keys(where), (key, idx) => {
                 if (where[key] === undefined ||
                     ((key.endsWith('_begin') || key.endsWith('_min') || key.endsWith('_end') || key.endsWith('_max')) && !where[key])) {
                     return;
                 }
 
-                if (parameters.length > 0) {
+                if (idx > 0) {
                     sql += ' AND ';
                 }
                 else {
@@ -81,6 +92,10 @@ export class Database {
                 }
                 else if (key.endsWith('_end') || key.endsWith('_max')) {
                     sql += `${key.substring(0, key.lastIndexOf('_'))} <= ?`;
+                }
+                else if (where[key] === null) {
+                    sql += `${key} is NULL`;
+                    return;
                 }
                 else {
                     sql += `${key}= ?`;

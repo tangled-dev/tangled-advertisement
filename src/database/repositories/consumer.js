@@ -2,7 +2,7 @@ import {Database} from '../database';
 
 export default class Consumer {
     constructor(database) {
-        this.database = database;
+        this.database                = database;
         this.normalizationRepository = null;
     }
 
@@ -81,7 +81,8 @@ export default class Consumer {
                 });
 
                 const advertisementGUIDs = _.keys(advertisements);
-                this.database.all(`SELECT * FROM advertisement_consumer.advertisement_attribute
+                this.database.all(`SELECT *
+                                   FROM advertisement_consumer.advertisement_attribute
                                    WHERE advertisement_guid IN (${advertisementGUIDs.map(() => '?').join(',')})`, advertisementGUIDs, (err, data) => {
                     if (err) {
                         return reject(err);
@@ -101,5 +102,42 @@ export default class Consumer {
 
             });
         });
+    }
+
+    addAdvertisementPaymentSettlement(paymentData) {
+        const ledgerGUID = Database.generateID(32);
+        const statements = [
+            [
+                `UPDATE advertisement_consumer.advertisement_queue
+                 SET ledger_guid              = ?,
+                     protocol_transaction_id  = ?,
+                     protocol_output_position = ?
+                 WHERE creative_request_guid = ?`,
+                ledgerGUID,
+                paymentData.protocol_transaction_id,
+                paymentData.protocol_output_position,
+                paymentData.advertisement_request_guid
+            ],
+            [
+                `INSERT INTO advertisement_consumer.settlement_ledger (ledger_guid,
+                                                                       advertisement_request_guid,
+                                                                       protocol_address_hash,
+                                                                       protocol_transaction_id,
+                                                                       protocol_output_position,
+                                                                       tx_address_deposit_vout_md5,
+                                                                       deposit,
+                                                                       price_usd)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                ledgerGUID,
+                paymentData.advertisement_request_guid,
+                paymentData.protocol_address_hash,
+                paymentData.protocol_transaction_id,
+                paymentData.protocol_output_position,
+                paymentData.tx_address_deposit_vout_md5,
+                paymentData.deposit,
+                paymentData.price_usd
+            ]
+        ];
+        return this.database.runBatchAsync(statements);
     }
 }

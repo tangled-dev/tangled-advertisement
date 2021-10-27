@@ -28,7 +28,12 @@ function getSHA1Buffer(obj, fromBuffer) {
     }
 }
 
+function getMD5Buffer(message) {
+    return crypto.createHash('md5').update(message, 'utf8').digest();
+}
+
 export default {
+    getMD5Buffer,
     getCHash160,
     getCHash288,
     getHashBuffer,

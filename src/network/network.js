@@ -12,6 +12,7 @@ import dns from 'dns';
 import NatAPI from 'nat-api';
 import task from '../core/task';
 import Utils from '../core/utils';
+import client from '../api/client';
 
 
 class Network {
@@ -426,24 +427,27 @@ class Network {
     _initializeServer() {
         this.natAPI = new NatAPI();
         return Utils.loadNodeKeyAndCertificate()
-                   .then(({
-                              node_public_key            : publicKey
-                          }) => {
-                       this.nodePublicKey  = base58.encode(publicKey.toBuffer());
-                       this.nodeID         = Utils.getNodeIdFromPublicKey(this.nodePublicKey);
-                       console.log('node id : ', this.nodeID);
-                       return this.doPortMapping()
-                                  .then(() => this.startAcceptingConnections())
-                                  .catch((e) => {
-                                      console.log(`[network] error in nat-pmp ${e}`);
-                                      return this.startAcceptingConnections();
-                                  })
-                                  .then(() => {
-                                      this.connectToNodes();
-                                      this.initialized = true;
-                                      eventBus.on('node_handshake', this._onNodeHandshake.bind(this));
-                                  });
-                   });
+                    .then(({
+                               node_public_key: publicKey,
+                               node_id        : nodeID,
+                               node_signature : nodeSignature
+                           }) => {
+                        client.loadCredentials(nodeID, nodeSignature);
+                        this.nodePublicKey = base58.encode(publicKey.toBuffer());
+                        this.nodeID        = Utils.getNodeIdFromPublicKey(this.nodePublicKey);
+                        console.log('node id : ', this.nodeID);
+                        return this.doPortMapping()
+                                   .then(() => this.startAcceptingConnections())
+                                   .catch((e) => {
+                                       console.log(`[network] error in nat-pmp ${e}`);
+                                       return this.startAcceptingConnections();
+                                   })
+                                   .then(() => {
+                                       this.connectToNodes();
+                                       this.initialized = true;
+                                       eventBus.on('node_handshake', this._onNodeHandshake.bind(this));
+                                   });
+                    });
     }
 
     initialize() {

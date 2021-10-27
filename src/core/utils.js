@@ -49,6 +49,10 @@ class Utils {
         return extension;
     }
 
+    signMessage(nodePrivateKey, message) {
+        return signature.sign(objectHash.getHashBuffer(message), nodePrivateKey.toBuffer());
+    }
+
     loadNodeKeyAndCertificate() {
         return new Promise((resolve, reject) => {
             const elements = [
@@ -73,7 +77,7 @@ class Utils {
                 }
             ];
             async.mapSeries(elements, (element, callback) => {
-                fs.readFile(element.file, 'utf8', function(err, pemData) {
+                fs.readFile(element.file, 'utf8', (err, pemData) => {
                     if (err) {
                         return callback(true);
                     }
@@ -84,7 +88,9 @@ class Utils {
                                 const obj = element.transformer(data.key);
                                 return callback(null, {
                                     [element.key + '_private_key']: obj.privateKey,
-                                    [element.key + '_public_key'] : obj.publicKey
+                                    [element.key + '_public_key'] : obj.publicKey,
+                                    [element.key + '_id']         : data.node_id,
+                                    [element.key + '_signature']  : data.node_signature || this.signMessage(obj.privateKey, data.node_id)
                                 });
                             }
                             else {
@@ -144,11 +150,11 @@ class Utils {
 
                         const privateKeyPem = KEYUTIL.getPEM(ecKeypair.prvKeyObj, 'PKCS1PRV');
 
-                        fs.writeFile(path.join(os.homedir(), config.NODE_CERTIFICATE_KEY_PATH), privateKeyPem, 'utf8', function(err) {
+                        fs.writeFile(path.join(os.homedir(), config.NODE_CERTIFICATE_KEY_PATH), privateKeyPem, 'utf8', (err) => {
                             if (err) {
                                 return reject('failed to write node private key file');
                             }
-                            fs.writeFile(path.join(os.homedir(), config.NODE_CERTIFICATE_PATH), certificatePem, 'utf8', function(err) {
+                            fs.writeFile(path.join(os.homedir(), config.NODE_CERTIFICATE_PATH), certificatePem, 'utf8', (err) => {
                                 if (err) {
                                     return reject('failed to write node certificate file');
                                 }
@@ -158,7 +164,9 @@ class Utils {
                                     certificate                : certificate,
                                     certificate_pem            : certificatePem,
                                     node_private_key           : nodeKey.privateKey,
-                                    node_public_key            : nodeKey.publicKey
+                                    node_public_key            : nodeKey.publicKey,
+                                    node_id                    : nodeID,
+                                    node_signature             : this.signMessage(nodeKey.privateKey, nodeID)
                                 });
                             });
                         });

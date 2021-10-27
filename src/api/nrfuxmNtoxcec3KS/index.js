@@ -1,7 +1,7 @@
 import Endpoint from '../endpoint';
 import database, {Database} from '../../database/database';
 import _ from 'lodash';
-import config, {MILLIX_USD_VALUE} from '../../config/config';
+import config from '../../config/config';
 
 
 /**
