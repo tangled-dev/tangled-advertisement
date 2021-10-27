@@ -184,16 +184,46 @@ export class Peer {
 
         console.log(`[peer] payment request received from node ${ws.nodeID}:`, data);
         const advertiserRepository = database.getRepository('advertiser');
-        advertiserRepository.getAdvertisementIfPaymentNotFound(data.advertisement_guid, data.request_guid)
-                            .then(advertisement => {
-                                if (!advertisement) {
-                                    console.log(`[peer] cannot create payment for ${data.advertisement_guid}:${data.request_guid}`);
+        advertiserRepository.getAdvertisementLedger({advertisement_request_guid: data.request_guid})
+                            .then(advertisementLedgerData => {
+
+                                if (advertisementLedgerData) {
+                                    const normalizationRepository = database.getRepository('normalization');
+                                    const message                 = {
+                                        'message_guid'           : Database.generateID(32),
+                                        advertisement_ledger_list: [
+                                            {
+                                                'protocol_transaction_id' : _.find(advertisementLedgerData.attributes, {attribute_type_guid: normalizationRepository.get('protocol_transaction_id')}).value,
+                                                'protocol_output_position': parseInt(_.find(advertisementLedgerData.attributes, {attribute_type_guid: normalizationRepository.get('protocol_output_position')}).value),
+                                                'deposit'                 : advertisementLedgerData.withdrawal,
+                                                ..._.pick(advertisementLedgerData, [
+                                                    'advertisement_request_guid',
+                                                    'advertisement_guid',
+                                                    'tx_address_deposit_vout_md5',
+                                                    'price_usd'
+                                                ])
+                                            }
+                                        ]
+                                    };
+
+                                    this._advertisementPaymentResponseQueue[message.message_guid] = {
+                                        timestamp: Date.now()
+                                    };
+                                    this.propagateRequest('advertisement_payment_response', message);
                                     return;
                                 }
-                                console.log(`[peer] advertisement data for pending payment`, advertisement);
-                                console.log(`[peer] add pending payment to request ${data.request_guid}`);
-                                return advertiserRepository.addAdvertisementPayment(data.advertisement_guid, data.request_guid, Math.min(config.ADS_TRANSACTION_AMOUNT_MAX, advertisement.bid_impression_mlx), 'withdrawal:external')
-                                                           .then(advertisementLedgerData => console.log(`[peer] advertisement ledger record created`, advertisementLedgerData));
+
+                                return advertiserRepository.getAdvertisementIfPaymentNotFound(data.advertisement_guid, data.request_guid)
+                                                           .then(advertisement => {
+                                                               if (!advertisement) {
+                                                                   console.log(`[peer] cannot create payment for ${data.advertisement_guid}:${data.request_guid}`);
+                                                                   return;
+                                                               }
+                                                               console.log(`[peer] advertisement data for pending payment`, advertisement);
+                                                               console.log(`[peer] add pending payment to request ${data.request_guid}`);
+                                                               return advertiserRepository.addAdvertisementPayment(data.advertisement_guid, data.request_guid, Math.min(config.ADS_TRANSACTION_AMOUNT_MAX, advertisement.bid_impression_mlx), 'withdrawal:external')
+                                                                                          .then(advertisementLedgerData => console.log(`[peer] advertisement ledger record created`, advertisementLedgerData));
+                                                           });
                             });
     }
 
@@ -207,7 +237,7 @@ export class Peer {
 
         mutex.lock(['payment_response'], unlock => {
             const consumerRepository = database.getRepository('consumer');
-            async.eachSeries(data, (paymentData, callback) => {
+            async.eachSeries(data.advertisement_ledger_list, (paymentData, callback) => {
                 consumerRepository.listAdvertisement({
                     protocol_transaction_id: null,
                     creative_request_guid  : paymentData.advertisement_request_guid
@@ -306,12 +336,15 @@ export class Peer {
                                     });
                                 })
                                 .then(data => {
-                                    data['message_guid']                                       = Database.generateID(32);
-                                    //send transaction
+                                    const message = {
+                                        message_guid             : Database.generateID(32),
+                                        advertisement_ledger_list: data
+                                    };
+
                                     this._advertisementPaymentResponseQueue[data.message_guid] = {
                                         timestamp: Date.now()
                                     };
-                                    this.propagateRequest('advertisement_payment_response', data);
+                                    this.propagateRequest('advertisement_payment_response', message);
                                 })
                                 .then(() => unlock())
                                 .catch(err => {

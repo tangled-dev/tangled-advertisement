@@ -308,6 +308,56 @@ export default class Advertiser {
         });
     }
 
+    getAdvertisementLedger(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_ledger l INNER JOIN advertisement_ledger_attribute a on l.ledger_guid = a.ledger_guid', where);
+            this.database.all(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+
+                if (!data || data.length === 0) {
+                    return resolve();
+                }
+
+                const advertisementLedgerData         = _.pick(data[0], [
+                    'ledger_id',
+                    'ledger_guid',
+                    'ledger_guid_pair',
+                    'advertisement_guid',
+                    'advertisement_request_guid',
+                    'transaction_type_guid',
+                    'tx_address_deposit_vout_md5',
+                    'currency_guid',
+                    'deposit',
+                    'withdrawal',
+                    'price_usd',
+                    'status',
+                    'create_date'
+                ]);
+                advertisementLedgerData['attributes'] = [];
+                data.forEach(row => {
+                    advertisementLedgerData.attributes.push(_.pick(row, [
+                        'ledger_attribute_id',
+                        'ledger_attribute_guid',
+                        'ledger_guid',
+                        'attribute_type_guid',
+                        'object_guid',
+                        'object_key',
+                        'value',
+                        'status',
+                        'create_date'
+                    ]));
+                });
+
+                resolve(advertisementLedgerData);
+            });
+        });
+    }
+
     addAdvertisementPayment(advertisementGUID, requestGUID, mlxAmount, transactionType, attributes = []) {
         const ledgerGUID          = Database.generateID(32);
         const ledgerPairGUID      = Database.generateID(32);
@@ -369,8 +419,8 @@ export default class Advertiser {
     }
 
     updateAdvertisementLedgerWithPayment(transaction, advertisementLedgerOutputList) {
-        const statements = [];
-        const data       = [];
+        const statements                          = [];
+        const data                                = [];
         const feeOutput                           = _.find(transaction.transaction_output_list, {output_position: -1});
         const feeAddress                          = `${feeOutput.address_base}${feeOutput.address_version}${feeOutput.address_key_identifier}`;
         const feeTransactionAddressDepositVOutMd5 = objectHash.getMD5Buffer(`${transaction.transaction_id}${feeAddress}${feeOutput.output_position}${feeOutput.amount}`).toString('hex');
@@ -382,10 +432,11 @@ export default class Advertiser {
         const feeUSDAmount                        = feeMLXAmount / config.MILLIX_USD_VALUE;
 
         advertisementLedgerOutputList.forEach((advertisementLedgerOutput, outputPosition) => {
-            const address                             = `${advertisementLedgerOutput.output.address_base}${advertisementLedgerOutput.output.address_version}${advertisementLedgerOutput.output.address_key_identifier}`;
-            const transactionAddressDepositVOutMd5    = objectHash.getMD5Buffer(`${transaction.transaction_id}${address}${outputPosition}${advertisementLedgerOutput.output.amount}`).toString('hex');
+            const address                          = `${advertisementLedgerOutput.output.address_base}${advertisementLedgerOutput.output.address_version}${advertisementLedgerOutput.output.address_key_identifier}`;
+            const transactionAddressDepositVOutMd5 = objectHash.getMD5Buffer(`${transaction.transaction_id}${address}${outputPosition}${advertisementLedgerOutput.output.amount}`).toString('hex');
             data.push({
                 advertisement_request_guid : advertisementLedgerOutput.advertisement_ledger.advertisement_request_guid,
+                advertisement_guid         : advertisementLedgerOutput.advertisement_ledger.advertisement_guid,
                 protocol_address_hash      : address,
                 protocol_transaction_id    : transaction.transaction_id,
                 protocol_output_position   : outputPosition,
@@ -431,17 +482,17 @@ export default class Advertiser {
 
         statements.push([ // payment fee
                 `INSERT INTO advertisement_advertiser.advertisement_ledger
-                     (ledger_guid,
-                      ledger_guid_pair,
-                      advertisement_guid,
-                      advertisement_request_guid,
-                      transaction_type_guid,
-                      tx_address_deposit_vout_md5,
-                      currency_guid,
-                      withdrawal,
-                      price_usd)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
-                    `,
+                 (ledger_guid,
+                  ledger_guid_pair,
+                  advertisement_guid,
+                  advertisement_request_guid,
+                  transaction_type_guid,
+                  tx_address_deposit_vout_md5,
+                  currency_guid,
+                  withdrawal,
+                  price_usd)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                `,
                 feeLedgerGUID,
                 pairLedgerGUID,
                 null,
@@ -454,11 +505,11 @@ export default class Advertiser {
             ],
             [
                 `INSERT INTO advertisement_advertiser.advertisement_ledger_attribute
-                     (ledger_attribute_guid,
-                      ledger_guid,
-                      attribute_type_guid,
-                      value)
-                     VALUES (?, ?, ?, ?);`,
+                 (ledger_attribute_guid,
+                  ledger_guid,
+                  attribute_type_guid,
+                  value)
+                 VALUES (?, ?, ?, ?);`,
                 Database.generateID(32),
                 feeLedgerGUID,
                 this.normalizationRepository.get('protocol_transaction_id'),
@@ -466,11 +517,11 @@ export default class Advertiser {
             ],
             [
                 `INSERT INTO advertisement_advertiser.advertisement_ledger_attribute
-                     (ledger_attribute_guid,
-                      ledger_guid,
-                      attribute_type_guid,
-                      value)
-                     VALUES (?, ?, ?, ?);`,
+                 (ledger_attribute_guid,
+                  ledger_guid,
+                  attribute_type_guid,
+                  value)
+                 VALUES (?, ?, ?, ?);`,
                 Database.generateID(32),
                 feeLedgerGUID,
                 this.normalizationRepository.get('protocol_output_position'),

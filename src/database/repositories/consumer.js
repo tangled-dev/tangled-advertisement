@@ -112,11 +112,12 @@ export default class Consumer {
                  SET ledger_guid              = ?,
                      protocol_transaction_id  = ?,
                      protocol_output_position = ?
-                 WHERE creative_request_guid = ?`,
+                 WHERE creative_request_guid = ? AND advertisement_guid = ?`,
                 ledgerGUID,
                 paymentData.protocol_transaction_id,
                 paymentData.protocol_output_position,
-                paymentData.advertisement_request_guid
+                paymentData.advertisement_request_guid,
+                paymentData.advertisement_guid,
             ],
             [
                 `INSERT INTO advertisement_consumer.settlement_ledger (ledger_guid,
