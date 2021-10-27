@@ -1,4 +1,5 @@
 export const DEBUG                       = true;
+export const MODE_TEST                   = false;
 export const VERSION                     = '1.0.0';
 export const NAME                        = 'tangled-advertisement';
 export const DATABASE_ENGINE             = 'sqlite';
@@ -11,7 +12,7 @@ export const NODE_NAT_PMP                = true;
 export const WEBSOCKET_PROTOCOL          = 'ws://';
 export const NETWORK_LONG_TIME_WAIT_MAX  = 3000;
 export const NETWORK_SHORT_TIME_WAIT_MAX = 1500;
-export const TRANSACTION_ADDRESS_VERSION = 'lal';
+export const TRANSACTION_ADDRESS_VERSION = MODE_TEST ? 'la2l' : '0a20';
 export const TRANSACTION_OUTPUT_MAX      = 128;
 export const TRANSACTION_PROXY_FEE       = 1000;
 export const ADS_TRANSACTION_AMOUNT_MAX  = 9999999;
