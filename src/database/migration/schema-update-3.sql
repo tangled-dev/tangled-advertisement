@@ -50,7 +50,7 @@ CREATE TABLE advertisement_consumer.settlement_ledger
     protocol_address_hash char(128), -- (address received to)
     protocol_transaction_id char(64),
     protocol_output_position int(11),
-    tx_address_deposit_vout_md5 char(32), -- (unique index based on md5 of 4 values prevents duplicate deposit records from the same protocol tx)
+    tx_address_deposit_vout_md5 char(32) UNIQUE, -- (unique index based on md5 of 4 values prevents duplicate deposit records from the same protocol tx)
     deposit decimal(32,16),
     price_usd decimal(32,16),
     protocol_is_stable tinyint(1),
@@ -62,9 +62,6 @@ CREATE TABLE advertisement_consumer.settlement_ledger
 
 INSERT INTO advertisement_consumer.settlement_ledger SELECT * FROM advertisement_consumer.advertisement_attribute_type;
 DROP TABLE advertisement_consumer.advertisement_attribute_type;
-
-INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('mlx', 'ytvVWD56H'); /*currency type*/
-INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('usd', '03VWEI5AS');
 
 CREATE TABLE advertisement_consumer.new_advertisement_ledger
 (
@@ -88,8 +85,5 @@ CREATE INDEX idx_advertisement_ledger_advertisement_request ON advertisement_con
 INSERT INTO advertisement_advertiser.new_advertisement_ledger SELECT * FROM advertisement_advertiser.advertisement_ledger;
 DROP TABLE advertisement_advertiser.advertisement_ledger;
 ALTER TABLE advertisement_advertiser.new_advertisement_ledger RENAME TO advertisement_ledger;
-
-INSERT INTO advertisement_advertiser.ledger_attribute_type (attribute_type_guid, attribute_type) VALUES ('1VESrvDin', 'protocol_transaction_id');
-INSERT INTO advertisement_advertiser.ledger_attribute_type (attribute_type_guid, attribute_type) VALUES ('HaaC5HUYp', 'protocol_output_position');
 
 COMMIT;

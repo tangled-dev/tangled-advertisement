@@ -132,7 +132,7 @@ CREATE TABLE advertisement_click_log
     ip_address_consumer varchar(45),
     expiration timestamp,
     status smallint NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
-    create_date datetime
+    create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
 );
 
 

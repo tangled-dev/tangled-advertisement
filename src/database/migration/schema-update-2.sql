@@ -71,9 +71,10 @@ INSERT INTO advertisement_advertiser.new_advertisement_click_log (log_id, log_gu
 DROP TABLE advertisement_advertiser.advertisement_click_log;
 ALTER TABLE advertisement_advertiser.new_advertisement_click_log RENAME TO advertisement_click_log;
 
-INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('protocol_transaction_id', 'xOg6QHxWh');
-INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('protocol_output_position', 'NFusedKqF');
-INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('mlx', 'MfWwkiPfX');
+INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('protocol_transaction_id', '1VESrvDin');/*advertisement ledger attribute*/
+INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('protocol_output_position', 'HaaC5HUYp');
+INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('mlx', 'ytvVWD56H'); /*currency type*/
+INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('usd', '03VWEI5AS');
 
 INSERT INTO advertisement_advertiser.ledger_attribute_type (attribute_type, attribute_type_guid) VALUES  ('protocol_transaction_id', 'xOg6QHxWh');
 INSERT INTO advertisement_advertiser.ledger_attribute_type (attribute_type, attribute_type_guid) VALUES  ('protocol_output_position', 'NFusedKqF');
