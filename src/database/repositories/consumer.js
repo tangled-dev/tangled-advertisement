@@ -104,6 +104,47 @@ export default class Consumer {
         });
     }
 
+    getRandomAdvertisementWithPayment() {
+        return new Promise((resolve, reject) => {
+            this.database.get(`SELECT a.*
+                               FROM advertisement_consumer.advertisement_queue a
+                                        INNER JOIN advertisement_consumer.settlement_ledger l
+                               WhERE a.ledger_guid = l.ledger_guid
+                               ORDER BY RANDOM()
+                               LIMIT 1`, [], (err, advertisement) => {
+                if (err) {
+                    return reject(err);
+                }
+
+                if (!advertisement) {
+                    return resolve();
+                }
+
+                advertisement['attributes'] = [];
+
+                this.database.all(`SELECT *
+                                   FROM advertisement_consumer.advertisement_attribute
+                                   WHERE advertisement_guid = ?`, [advertisement.advertisement_guid], (err, data) => {
+                    if (err) {
+                        return reject(err);
+                    }
+
+                    data.forEach(attribute => {
+                        advertisement.attributes.push({
+                            attribute_guid: attribute.advertisement_attribute_guid,
+                            attribute_type: this.normalizationRepository.getType(attribute.attribute_type_guid),
+                            object        : this.normalizationRepository.getType(attribute.object_guid),
+                            value         : attribute.value
+                        });
+                    });
+
+                    resolve(advertisement);
+                });
+
+            });
+        });
+    }
+
     addAdvertisementPaymentSettlement(paymentData) {
         const ledgerGUID = Database.generateID(32);
         const statements = [
@@ -112,12 +153,13 @@ export default class Consumer {
                  SET ledger_guid              = ?,
                      protocol_transaction_id  = ?,
                      protocol_output_position = ?
-                 WHERE creative_request_guid = ? AND advertisement_guid = ?`,
+                 WHERE creative_request_guid = ?
+                   AND advertisement_guid = ?`,
                 ledgerGUID,
                 paymentData.protocol_transaction_id,
                 paymentData.protocol_output_position,
                 paymentData.advertisement_request_guid,
-                paymentData.advertisement_guid,
+                paymentData.advertisement_guid
             ],
             [
                 `INSERT INTO advertisement_consumer.settlement_ledger (ledger_guid,

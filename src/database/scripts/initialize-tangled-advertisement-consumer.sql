@@ -58,7 +58,7 @@ CREATE TABLE settlement_ledger
     protocol_address_hash char(128), -- (address received to)
     protocol_transaction_id char(64),
     protocol_output_position int(11),
-    tx_address_deposit_vout_md5 char(32), -- (unique index based on md5 of 4 values prevents duplicate deposit records from the same protocol tx)
+    tx_address_deposit_vout_md5 char(32) UNIQUE, -- (unique index based on md5 of 4 values prevents duplicate deposit records from the same protocol tx)
     deposit decimal(32,16),
     price_usd decimal(32,16),
     protocol_is_stable tinyint(1),
