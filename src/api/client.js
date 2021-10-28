@@ -30,8 +30,18 @@ class Client {
                 },
                 rejectUnauthorized: false
             }, res => {
-                res.on('data', response => {
-                    resolve(JSON.parse(response));
+                let response = '';
+                res.on('data', data => {
+                    response += data;
+                });
+
+                res.on('end', () => {
+                    try {
+                        resolve(JSON.parse(response));
+                    }
+                    catch (error) {
+                        reject(error.message);
+                    }
                     req.end();
                 });
             });
