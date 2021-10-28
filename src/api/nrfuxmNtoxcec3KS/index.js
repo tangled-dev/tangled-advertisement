@@ -20,6 +20,12 @@ class _nrfuxmNtoxcec3KS extends Endpoint {
      * @param res
      */
     handler(app, req, res) {
+        if (!config.MODE_TEST) {
+            return res.status(400).send({
+                api_status : 'fail',
+                api_message: `api not enabled: random advertisements cannot be created when mode_test is ${config.MODE_TEST}`
+            });
+        }
 
         let pipeline = Promise.resolve();
         if (this.protocolAddressKeyIdentifier === null) {
