@@ -47,6 +47,7 @@ export default {
     NAME,
     DEBUG,
     VERSION,
+    MODE_TEST,
     NODE_KEY_PATH,
     DATABASE_ENGINE,
     MILLIX_USD_VALUE,

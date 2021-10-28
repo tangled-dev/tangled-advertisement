@@ -20,10 +20,19 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
      * @returns {*}
      */
     handler(app, req, res) {
-        const {
-                  p0
-              }       = req.query;
-        const payload = JSON.parse(p0);
+        let payload;
+        try {
+            const {
+                      p0
+                  } = req.query;
+            payload = JSON.parse(p0);
+        }
+        catch (e) {
+            return res.status(400).send({
+                api_status : 'fail',
+                api_message: `p0 is not a valid JSON: ${e}`
+            });
+        }
 
         if (
             !payload.creative_name ||
@@ -41,10 +50,12 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
                 api_message: `creative_name<creative_name>, category<category_guid>, headline<headline>, target_language<language>, deck<deck>, url<url>, search_phrase<search_phrase>, daily_budget_mlx<daily_budget_mlx>, bid_per_impressions_mlx<bid_per_1k_impressions_mlx>`
             });
         }
-        else if (payload.bid_per_impressions_mlx > config.ADS_TRANSACTION_AMOUNT_MAX) {
+
+        const bidPerImpressionMLX = Math.floor(payload.bid_per_impressions_mlx / 1000);
+        if (bidPerImpressionMLX > config.ADS_TRANSACTION_AMOUNT_MAX) {
             return res.status(400).send({
                 api_status : 'fail',
-                api_message: `bid_per_impressions_mlx (${payload.bid_per_impressions_mlx}) is greater than the maximum allowed value: ${config.ADS_TRANSACTION_AMOUNT_MAX}`
+                api_message: `bid_per_impressions_mlx (${payload.bid_per_impressions_mlx}) is greater than the maximum allowed value: max bid per impression is ${config.ADS_TRANSACTION_AMOUNT_MAX}, current value is ${bidPerImpressionMLX}`
             });
         }
 
@@ -119,7 +130,7 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
                             budgetUSD,
                             payload.daily_budget_mlx,
                             bidImpressionUSD,
-                            payload.bid_per_impressions_mlx,
+                            bidPerImpressionMLX,
                             expiration,
                             advertisementAttributes
                         ).then(advertisement => res.send({
