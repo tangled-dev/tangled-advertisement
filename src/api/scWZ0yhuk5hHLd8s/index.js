@@ -109,7 +109,7 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
                                 attribute_type: 'target_phrase',
                                 object        : 'target phrase',
                                 object_key    : undefined,
-                                value         : payload.search_phrase
+                                value         : payload.target_phrase
                             },
                             {
                                 attribute_guid: targetLanguageUID,

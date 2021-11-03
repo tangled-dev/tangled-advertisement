@@ -1,4 +1,4 @@
-export const DEBUG                       = true;
+export const DEBUG                       = false;
 export const MODE_TEST                   = false;
 export const VERSION                     = '1.0.0';
 export const NAME                        = 'tangled-advertisement';
