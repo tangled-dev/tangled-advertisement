@@ -16,10 +16,11 @@ export default class Advertiser {
         return new Promise((resolve, reject) => {
             this.database.get(`SELECT *
                                FROM advertisement_advertiser.advertisement
-                               WHERE NOT EXISTS(SELECT advertisement_request_guid
-                                                FROM advertisement_advertiser.advertisement_ledger
-                                                WHERE advertisement_guid = ?1
-                                                  AND advertisement_request_guid = ?2)
+                               WHERE NOT EXISTS(
+                                   SELECT advertisement_request_guid
+                                   FROM advertisement_advertiser.advertisement_ledger
+                                   WHERE advertisement_guid = ?1
+                                     AND advertisement_request_guid = ?2)
                                  AND advertisement_guid = ?1`,
                 [
                     advertisementGUID,
@@ -32,6 +33,61 @@ export default class Advertiser {
                     resolve(data);
                 });
         });
+    }
+
+    getAdvertisementByProtocolAddressFunding(protocolAddressFunding) {
+        return this.getAdvertisement({protocol_address_funding: protocolAddressFunding});
+    }
+
+    listAdvertisementType(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_advertiser.advertisement_type', where);
+            this.database.all(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                if (data.length === 0) {
+                    return resolve(data);
+                }
+                const types = {};
+                data.forEach(type => {
+                    types[type.advertisement_type_guid] = {
+                        ...type
+                    };
+                });
+
+                resolve(_.values(types));
+            });
+        });
+    }
+
+    toggleAdvertisementStatus(advertisement_guid) {
+        let where = {advertisement_guid: advertisement_guid};
+        let set   = [];
+
+        return this.getAdvertisement({advertisement_guid: advertisement_guid}).then(advertisement => {
+
+            set['status'] = advertisement.status == 1 ? 0 : 1;
+            return new Promise((resolve, reject) => {
+                const {
+                          sql,
+                          parameters
+                      } = Database.buildUpdate(`UPDATE advertisement_advertiser.advertisement`, set, where);
+                this.database.run(sql, parameters, (err, data) => {
+                    if (err) {
+                        return reject(err);
+                    }
+                    resolve();
+                });
+            });
+
+        }).catch(e => res.send({
+            api_status : 'fail',
+            api_message: `unexpected generic api error: (${e})`
+        }));
     }
 
     listCategory(where) {

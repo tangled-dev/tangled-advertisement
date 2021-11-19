@@ -18,14 +18,13 @@ class _wDqnBLvXY6FGUSfc extends Endpoint {
      * @param res
      */
     handler(app, req, res) {
-        console.log('wDqnBLvXY6FGUSfc handler ');
         const languageRepository = database.getRepository('language');
         languageRepository.listLanguage({})
                           .then(languages => res.send(languages))
                           .catch(e => res.send({
                               api_status : 'fail',
                               api_message: `unexpected generic api error: (${e})`
-                          }));  ;
+                          }));
     }
 }
 

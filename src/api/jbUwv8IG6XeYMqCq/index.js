@@ -3,30 +3,25 @@ import database from '../../database/database';
 
 
 /**
- * api get_categories_list
+ * api get_ad_types
  */
 
-class _dAjjWCtPW1JbYwf6 extends Endpoint {
+class _jbUwv8IG6XeYMqCq extends Endpoint {
     constructor() {
-        super('dAjjWCtPW1JbYwf6');
+        super('jbUwv8IG6XeYMqCq');
     }
 
-    /**
-     * returns the list of advertiser categories
-     * @param app
-     * @param req
-     * @param res
-     */
     handler(app, req, res) {
         const advertiserRepository = database.getRepository('advertiser');
-        advertiserRepository.listCategory({})
-                            .then(categories => res.send(categories))
+        advertiserRepository.listAdvertisementType({})
+                            .then(types => res.send(types))
                             .catch(e => res.send({
                                 api_status : 'fail',
                                 api_message: `unexpected generic api error: (${e})`
                             }));
     }
+
 }
 
 
-export default new _dAjjWCtPW1JbYwf6();
+export default new _jbUwv8IG6XeYMqCq();
