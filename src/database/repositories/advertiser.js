@@ -36,7 +36,7 @@ export default class Advertiser {
     }
 
     getAdvertisementByProtocolAddressFunding(protocolAddressFunding) {
-        return this.getAdvertisement({protocol_address_funding: protocolAddressFunding});
+        return this.getAdvertisementList({protocol_address_funding: protocolAddressFunding});
     }
 
     listAdvertisementType(where) {
@@ -326,6 +326,21 @@ export default class Advertiser {
                       parameters
                   } = Database.buildQuery('SELECT * FROM advertisement_advertiser.advertisement', where);
             this.database.get(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve(data);
+            });
+        });
+    }
+
+    getAdvertisementList(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_advertiser.advertisement', where);
+            this.database.all(sql, parameters, (err, data) => {
                 if (err) {
                     return reject(err);
                 }
