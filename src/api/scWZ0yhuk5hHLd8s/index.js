@@ -138,7 +138,6 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
                             api_message  : 'created successfully',
                             advertisement: advertisement
                         }));
-
                     });
 
                 }).catch(e => res.send({

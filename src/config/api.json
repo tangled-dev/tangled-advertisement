@@ -62,6 +62,33 @@
       "version_released": "1.0.0",
       "permission": "{\"require_identity\": false, \"private\": false}",
       "enable": true
+    },
+    {
+      "id": "aerijOtODMtkHo6i",
+      "name": "list_ad",
+      "description": "list user ads",
+      "method": "GET",
+      "version_released": "1.0.0",
+      "permission": "{\"require_identity\": false, \"private\": false}",
+      "enable": true
+    },
+    {
+      "id": "jbUwv8IG6XeYMqCq",
+      "name": "get_ad_types",
+      "description": "get ad types",
+      "method": "GET",
+      "version_released": "1.0.0",
+      "permission": "{\"require_identity\": false, \"private\": false}",
+      "enable": true
+    },
+    {
+      "id": "C7neErVANMWXWuse",
+      "name": "toggle_ad_status",
+      "description": "toggle ad status",
+      "method": "GET",
+      "version_released": "1.0.0",
+      "permission": "{\"require_identity\": false, \"private\": false}",
+      "enable": true
     }
   ]
 }
