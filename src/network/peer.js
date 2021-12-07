@@ -249,36 +249,37 @@ export class Peer {
         });
     }
 
-    requestAdvertisementPayment() {
+    requestAdvertisementPayment(advertisementGUID) {
         const consumerRepository = database.getRepository('consumer');
-        consumerRepository.listAdvertisement({protocol_transaction_id: null})
-                          .then(advertisementList => {
-                              console.log(`[peer] advertisement without payment:`, advertisementList);
-                              advertisementList.forEach(advertisement => {
-
-                                  const payload = {
-                                      type   : 'advertisement_payment_request',
-                                      content: {
-                                          ..._.mapKeys(_.pick(advertisement, [
-                                              'advertisement_guid',
-                                              'creative_request_guid'
-                                          ]), (_, k) => k === 'creative_request_guid' ? 'request_guid' : k),
-                                          message_guid: Database.generateID(32)
-                                      }
-                                  };
-                                  const data    = JSON.stringify(payload);
-                                  network.registeredClients.forEach(ws => {
-                                      try {
-                                          ws.send(data);
-                                      }
-                                      catch (e) {
-                                          console.log('[WARN]: try to send data over a closed connection.');
-                                          ws && ws.close();
-                                          network._unregisterWebsocket(ws);
-                                      }
-                                  });
-                              });
-                          });
+        consumerRepository.getAdvertisement({
+            advertisement_guid     : advertisementGUID,
+            protocol_transaction_id: null
+        }).then(advertisement => {
+            if(advertisement) {
+                console.log(`[peer] advertisement without payment:`, advertisement);
+                const payload = {
+                    type   : 'advertisement_payment_request',
+                    content: {
+                        ..._.mapKeys(_.pick(advertisement, [
+                            'advertisement_guid',
+                            'creative_request_guid'
+                        ]), (_, k) => k === 'creative_request_guid' ? 'request_guid' : k),
+                        message_guid: Database.generateID(32)
+                    }
+                };
+                const data    = JSON.stringify(payload);
+                network.registeredClients.forEach(ws => {
+                    try {
+                        ws.send(data);
+                    }
+                    catch (e) {
+                        console.log('[WARN]: try to send data over a closed connection.');
+                        ws && ws.close();
+                        network._unregisterWebsocket(ws);
+                    }
+                });
+            }
+        });
     }
 
     processAdvertisementPayment() {
@@ -364,7 +365,6 @@ export class Peer {
         //out
         eventBus.on('peer_connection', (ws) => this.notifyNewPeer(ws));
         task.scheduleTask('peer-request-advertisement', () => this.requestAdvertisement(), 10000);
-        task.scheduleTask('advertisement-payment-request', () => this.requestAdvertisementPayment(), 10000);
         task.scheduleTask('advertisement-payment-process', () => this.processAdvertisementPayment(), 10000);
         const walletRepository   = database.getRepository('wallet');
         const keychainRepository = database.getRepository('keychain');
@@ -382,6 +382,7 @@ export class Peer {
         eventBus.removeAllListeners('advertisement_payment_response');
         eventBus.removeAllListeners('peer_connection');
         task.removeTask('peer-request-advertisement');
+        task.removeTask('advertisement-payment-process');
     }
 }
 

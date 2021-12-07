@@ -104,6 +104,21 @@ export default class Consumer {
         });
     }
 
+    getAdvertisement(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_consumer.advertisement_queue', where);
+            this.database.get(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve(data);
+            });
+        });
+    }
+
     getRandomAdvertisementWithPayment() {
         return new Promise((resolve, reject) => {
             this.database.get(`SELECT a.*
