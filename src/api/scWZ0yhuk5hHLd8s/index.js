@@ -72,19 +72,20 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
             const languageRepository   = database.getRepository('language');
             const advertiserRepository = database.getRepository('advertiser');
 
-            //todo: get an actual data from DB
+            /*todo: get an actual data from DB
             const advertisementTypes = [
                 'text_headline',
                 'text_headline_deck',
                 'banner_300x50',
                 'banner_728x90'
-            ];
+            ];*/
 
             const advertisementGUID         = Database.generateID(32);
             const headLineAttributeGUID     = Database.generateID(32);
+            const deckAttributeGUID         = Database.generateID(32);
             const targetPhraseAttributeGUID = Database.generateID(32);
             const targetLanguageUID         = Database.generateID(32);
-            const advertisementType         = _.sample(advertisementTypes);
+            const advertisementType         = 'text_headline_deck';
             const expiration                = Math.floor(Math.random() * 10) * 86400;
             const fundingAddress            = `${this.protocolAddressKeyIdentifier}0a0${this.protocolAddressKeyIdentifier}`;
 
@@ -103,6 +104,13 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
                                 object        : undefined,
                                 object_key    : undefined,
                                 value         : payload.headline
+                            },
+                            {
+                                attribute_guid: deckAttributeGUID,
+                                attribute_type: 'advertisement_deck',
+                                object        : undefined,
+                                object_key    : undefined,
+                                value         : payload.deck
                             },
                             {
                                 attribute_guid: targetPhraseAttributeGUID,
