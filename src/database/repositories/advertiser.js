@@ -21,7 +21,7 @@ export default class Advertiser {
                                    FROM advertisement_advertiser.advertisement_ledger
                                    WHERE advertisement_guid = ?1
                                      AND advertisement_request_guid = ?2)
-                                 AND advertisement_guid = ?1`,
+                                 AND advertisement_guid = ?1 AND status = 1`,
                 [
                     advertisementGUID,
                     requestGUID
@@ -145,7 +145,7 @@ export default class Advertiser {
                                    SELECT advertisement_guid
                                    FROM advertisement_advertiser.advertisement_request_log
                                    WHERE tangled_guid_consumer = ?
-                               )`, [consumerGUID], (err, data) => {
+                               ) AND status = 1`, [consumerGUID], (err, data) => {
                 if (err) {
                     return reject(err);
                 }
