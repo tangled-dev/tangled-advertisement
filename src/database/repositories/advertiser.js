@@ -144,7 +144,7 @@ export default class Advertiser {
                                WHERE advertisement_guid NOT IN (
                                    SELECT advertisement_guid
                                    FROM advertisement_advertiser.advertisement_request_log
-                                   WHERE tangled_guid_consumer = ?
+                                   WHERE tangled_guid_consumer = ? AND status = 1
                                ) AND status = 1`, [consumerGUID], (err, data) => {
                 if (err) {
                     return reject(err);

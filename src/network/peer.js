@@ -184,7 +184,7 @@ export class Peer {
 
         console.log(`[peer] payment request received from node ${ws.nodeID}:`, data);
         const advertiserRepository = database.getRepository('advertiser');
-        advertiserRepository.getAdvertisementLedger({advertisement_request_guid: data.request_guid})
+        advertiserRepository.getAdvertisementLedger({advertisement_guid: data.advertisement_guid, advertisement_request_guid: data.request_guid})
                             .then(advertisementLedgerData => {
 
                                 if (advertisementLedgerData) {
@@ -286,7 +286,7 @@ export class Peer {
         mutex.lock(['payment'], unlock => {
             console.log(`[peer] processing advertisement payments`);
             const advertiserRepository = database.getRepository('advertiser');
-            advertiserRepository.listAdvertisementLedger({tx_address_deposit_vout_md5: null}, config.TRANSACTION_OUTPUT_MAX)
+            advertiserRepository.listAdvertisementLedger({tx_address_deposit_vout_md5: null}, config.TRANSACTION_OUTPUT_MAX - 1)// max - 1 (output allocated to fee)
                                 .then(pendingPaymentList => {
                                     return new Promise(resolve => {
                                         const ledgerGUIDKeyIdentifier = {};
@@ -295,13 +295,13 @@ export class Peer {
                                                 return callback();
                                             }
                                             console.log(`[peer] processing payment for `, pendingPayment);
-                                            advertiserRepository.getAdvertisementRequestLog({advertisement_request_guid: pendingPayment.advertisement_request_guid})
+                                            advertiserRepository.getAdvertisementRequestLog({advertisement_guid: pendingPayment.advertisement_guid, advertisement_request_guid: pendingPayment.advertisement_request_guid})
                                                                 .then(requestLog => {
                                                                     ledgerGUIDKeyIdentifier[pendingPayment.ledger_guid] = requestLog.protocol_address_key_identifier;
                                                                     callback();
                                                                 }).catch(() => callback());
                                         }, () => {
-                                            resolve(pendingPaymentList.filter(pendingPayment => !!ledgerGUIDKeyIdentifier[pendingPayment.ledger_guid])
+                                            resolve(pendingPaymentList.filter(pendingPayment => !!ledgerGUIDKeyIdentifier[pendingPayment.ledger_guid]) // filter ledger guid with known key identifier
                                                                       .map((pendingPayment) => ({
                                                                           advertisement_ledger: pendingPayment,
                                                                           output              : {
