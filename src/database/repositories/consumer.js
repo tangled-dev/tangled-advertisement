@@ -119,43 +119,46 @@ export default class Consumer {
         });
     }
 
-    getRandomAdvertisementWithPayment() {
+    fillAdvertisementAttributes(advertisement) {
         return new Promise((resolve, reject) => {
-            this.database.get(`SELECT a.*
-                               FROM advertisement_consumer.advertisement_queue a
-                                        INNER JOIN advertisement_consumer.settlement_ledger l
-                               WhERE a.ledger_guid = l.ledger_guid
-                               ORDER BY RANDOM()
-                               LIMIT 1`, [], (err, advertisement) => {
+            advertisement['attributes'] = [];
+            this.database.all(`SELECT *
+                               FROM advertisement_consumer.advertisement_attribute
+                               WHERE advertisement_guid = ?`, [advertisement.advertisement_guid], (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+
+                data.forEach(attribute => {
+                    advertisement.attributes.push({
+                        attribute_guid: attribute.advertisement_attribute_guid,
+                        attribute_type: this.normalizationRepository.getType(attribute.attribute_type_guid),
+                        object        : this.normalizationRepository.getType(attribute.object_guid),
+                        value         : attribute.value
+                    });
+                });
+
+                resolve(advertisement);
+            });
+        });
+    }
+
+    getRandomAdvertisement() {
+        return new Promise((resolve, reject) => {
+            return this.database.get(`SELECT *
+                                              FROM advertisement_consumer.advertisement_queue
+                                              ORDER BY RANDOM()
+                                              LIMIT 1`, [], (err, advertisement) => {
+
                 if (err) {
                     return reject(err);
                 }
 
                 if (!advertisement) {
-                    return resolve();
+                    resolve({});
                 }
 
-                advertisement['attributes'] = [];
-
-                this.database.all(`SELECT *
-                                   FROM advertisement_consumer.advertisement_attribute
-                                   WHERE advertisement_guid = ?`, [advertisement.advertisement_guid], (err, data) => {
-                    if (err) {
-                        return reject(err);
-                    }
-
-                    data.forEach(attribute => {
-                        advertisement.attributes.push({
-                            attribute_guid: attribute.advertisement_attribute_guid,
-                            attribute_type: this.normalizationRepository.getType(attribute.attribute_type_guid),
-                            object        : this.normalizationRepository.getType(attribute.object_guid),
-                            value         : attribute.value
-                        });
-                    });
-
-                    resolve(advertisement);
-                });
-
+                return this.fillAdvertisementAttributes(advertisement).then(resolve).catch(reject);
             });
         });
     }
