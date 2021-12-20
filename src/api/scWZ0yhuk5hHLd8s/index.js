@@ -51,7 +51,7 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
             });
         }
 
-        const bidPerImpressionMLX = Math.floor(payload.bid_per_impressions_mlx / 1000);
+        const bidPerImpressionMLX = Math.floor(payload.bid_per_impressions_mlx);
         if (bidPerImpressionMLX > config.ADS_TRANSACTION_AMOUNT_MAX) {
             return res.status(400).send({
                 api_status : 'fail',
