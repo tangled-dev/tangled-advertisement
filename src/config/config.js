@@ -16,15 +16,43 @@ export const TRANSACTION_ADDRESS_VERSION = MODE_TEST ? 'lal' : '0a0';
 export const TRANSACTION_OUTPUT_MAX      = 128;
 export const TRANSACTION_PROXY_FEE       = 1000;
 export const ADS_TRANSACTION_AMOUNT_MAX  = 9999999;
-export const MILLIX_USD_VALUE            = 100000000 / 12; /*TODO: get this from an external api like fiatleak*/
+export const MILLIX_USD_VALUE            = 100000000 / 56; /*TODO: get this from an external api like fiatleak*/
 
 export const NODE_INITIAL_LIST         = [
     {
-        host: '94.61.203.180',
+        host: '89.114.105.216',
         port: 15550
     },
     {
         host: '216.170.172.149',
+        port: 15550
+    },
+    {
+        host: '85.25.177.215',
+        port: 15550
+    },
+    {
+        host: '72.134.68.165',
+        port: 15550
+    },
+    {
+        host: '73.179.28.122',
+        port: 15550
+    },
+    {
+        host: '188.250.76.126',
+        port: 15550
+    },
+    {
+        host: '65.184.157.115',
+        port: 15550
+    },
+    {
+        host: '173.52.72.197',
+        port: 15550
+    },
+    {
+        host: '201.103.194.230',
         port: 15550
     }
 ];
