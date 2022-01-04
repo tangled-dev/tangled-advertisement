@@ -218,20 +218,24 @@ export default class Consumer {
 
     pruneAdvertisementQueue(timestamp) {
         return new Promise((resolve, reject) => {
-            this.database.all('select * from advertisement_consumer.advertisement_queue where create_date <= ? limit 1000', [timestamp], (err, data) => {
+            this.database.all('SELECT * FROM advertisement_consumer.advertisement_queue WHERE create_date <= ? LIMIT 1000', [timestamp], (err, data) => {
                 if (err) {
                     console.log('[database] error', err);
                     return reject(err);
                 }
 
                 const advertisementGUIDListToRemove = data.map(advertisement => advertisement.advertisement_guid);
-                this.database.run(`delete from advertisement_consumer.advertisement_attribute where advertisement_guid in (${advertisementGUIDListToRemove.map(() => '?').join(',')}`, advertisementGUIDListToRemove, (err) => {
+                this.database.run(`DELETE
+                                   FROM advertisement_consumer.advertisement_attribute
+                                   WHERE advertisement_guid in (${advertisementGUIDListToRemove.map(() => '?').join(',')}`, advertisementGUIDListToRemove, (err) => {
                     if (err) {
                         console.log('[database] error', err);
                         return reject(err);
                     }
 
-                    this.database.run(`delete from advertisement_consumer.advertisement_queue where advertisement_guid in (${advertisementGUIDListToRemove.map(() => '?').join(',')}`, advertisementGUIDListToRemove, (err) => {
+                    this.database.run(`DELETE
+                                       FROM advertisement_consumer.advertisement_queue
+                                       WHERE advertisement_guid in (${advertisementGUIDListToRemove.map(() => '?').join(',')}`, advertisementGUIDListToRemove, (err) => {
                         if (err) {
                             console.log('[database] error', err);
                             return reject(err);
