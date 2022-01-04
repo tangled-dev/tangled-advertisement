@@ -187,7 +187,10 @@ export class Peer {
 
         console.log(`[peer] payment request received from node ${ws.nodeID}:`, data);
         const advertiserRepository = database.getRepository('advertiser');
-        advertiserRepository.getAdvertisementLedger({advertisement_guid: data.advertisement_guid, advertisement_request_guid: data.request_guid})
+        advertiserRepository.getAdvertisementLedger({
+            advertisement_guid        : data.advertisement_guid,
+            advertisement_request_guid: data.request_guid
+        })
                             .then(advertisementLedgerData => {
 
                                 if (advertisementLedgerData) {
@@ -258,7 +261,7 @@ export class Peer {
             advertisement_guid     : advertisementGUID,
             protocol_transaction_id: null
         }).then(advertisement => {
-            if(advertisement) {
+            if (advertisement) {
                 console.log(`[peer] advertisement without payment:`, advertisement);
                 const payload = {
                     type   : 'advertisement_payment_request',
@@ -340,6 +343,7 @@ export class Peer {
                                             'amount'  : config.TRANSACTION_PROXY_FEE
                                         }
                                     }).then(data => {
+                                        console.log('[peer] payment done:', data);
                                         if (data.api_status !== 'success') {
                                             return Promise.reject(data.api_message);
                                         }
@@ -366,6 +370,13 @@ export class Peer {
         });
     }
 
+    pruneAdvertisementQueue() {
+        console.log('[peer] prune advertisement queue from consumer database');
+        const pruneOlderThanTimestamp = Math.floor(Date.now() / 1000 - config.ADS_PRUNE_AGE); // 2 days old
+        const consumerRepository = database.getRepository('consumer');
+        return consumerRepository.pruneAdvertisementQueue(pruneOlderThanTimestamp);
+    }
+
     initialize() {
         //in
         eventBus.on('new_peer', this._onNewPeer.bind(this));
@@ -377,6 +388,7 @@ export class Peer {
         eventBus.on('peer_connection', (ws) => this.notifyNewPeer(ws));
         task.scheduleTask('peer-request-advertisement', () => this.requestAdvertisement(), 10000);
         task.scheduleTask('advertisement-payment-process', () => this.processAdvertisementPayment(), 10000);
+        task.scheduleTask('advertisement-queue-prune', () => this.pruneAdvertisementQueue(), 60000);
         const walletRepository   = database.getRepository('wallet');
         const keychainRepository = database.getRepository('keychain');
         return walletRepository.getWallet()
@@ -394,6 +406,7 @@ export class Peer {
         eventBus.removeAllListeners('peer_connection');
         task.removeTask('peer-request-advertisement');
         task.removeTask('advertisement-payment-process');
+        task.removeTask('advertisement-queue-prune');
     }
 }
 
