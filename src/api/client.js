@@ -1,4 +1,4 @@
-import https from 'https';
+import request from 'request';
 
 
 class Client {
@@ -17,46 +17,26 @@ class Client {
 
     post(path, json) {
         return new Promise((resolve, reject) => {
-            const data = JSON.stringify(json);
-
-            const req = https.request({
-                hostname          : Client.HOST,
-                port              : Client.PORT,
-                path              : path,
-                method            : 'POST',
-                headers           : {
-                    'Content-Type'  : 'application/json',
-                    'Content-Length': data.length
+            request.post(
+                `https://${Client.HOST}:${Client.PORT}/${path}`,
+                {
+                    json,
+                    rejectUnauthorized: false
                 },
-                rejectUnauthorized: false
-            }, res => {
-                let response = '';
-                res.on('data', data => {
-                    response += data;
-                });
-
-                res.on('end', () => {
-                    try {
-                        resolve(JSON.parse(response));
+                function(error, response, body) {
+                    if (!error && response.statusCode === 200) {
+                        resolve(typeof body === 'string' ? JSON.parse(body) : body);
                     }
-                    catch (error) {
-                        reject(error.message);
+                    else {
+                        reject(body);
                     }
-                    req.end();
-                });
-            });
-
-            req.on('error', error => {
-                reject(error);
-                req.end();
-            });
-
-            req.write(data);
+                }
+            );
         });
     }
 
     sendTransaction(payload) {
-        return this.post(`/api/${this.nodeID}/${this.nodeSignature}/XPzc85T3reYmGro1`, {p0: payload});
+        return this.post(`api/${this.nodeID}/${this.nodeSignature}/XPzc85T3reYmGro1`, {p0: payload});
     }
 }
 
