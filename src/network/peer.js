@@ -2,7 +2,7 @@ import eventBus from '../core/event-bus';
 import network from './network';
 import database, {Database} from '../database/database';
 import task from '../core/task';
-import config from '../config/config';
+import config, {MODE_TEST} from '../config/config';
 import async from 'async';
 import mutex from '../core/mutex';
 import client from '../api/client';
@@ -58,7 +58,10 @@ export class Peer {
     }
 
     _onAdvertisementRequest(data, ws) {
-        if (this._proxyAdvertisementRequestQueue[data.request_guid] || this._advertisementRequestQueue[data.request_guid]) {
+        if (this._proxyAdvertisementRequestQueue[data.request_guid] || this._advertisementRequestQueue[data.request_guid] ||
+            !data.protocol_address_key_identifier ||
+            config.MODE_TEST === false && !data.protocol_address_key_identifier.startsWith('1') ||
+            config.MODE_TEST === true && data.protocol_address_key_identifier.startsWith('1')) {
             return;
         }
 
@@ -295,9 +298,17 @@ export class Peer {
                                                 return callback();
                                             }
                                             console.log(`[peer] processing payment for `, pendingPayment);
-                                            advertiserRepository.getAdvertisementRequestLog({advertisement_guid: pendingPayment.advertisement_guid, advertisement_request_guid: pendingPayment.advertisement_request_guid})
+                                            advertiserRepository.getAdvertisementRequestLog({
+                                                advertisement_guid        : pendingPayment.advertisement_guid,
+                                                advertisement_request_guid: pendingPayment.advertisement_request_guid
+                                            })
                                                                 .then(requestLog => {
-                                                                    ledgerGUIDKeyIdentifier[pendingPayment.ledger_guid] = requestLog.protocol_address_key_identifier;
+                                                                    if (config.MODE_TEST === false && requestLog.protocol_address_key_identifier && requestLog.protocol_address_key_identifier.startsWith('1')) {
+                                                                        ledgerGUIDKeyIdentifier[pendingPayment.ledger_guid] = requestLog.protocol_address_key_identifier;
+                                                                    }
+                                                                    else if (config.MODE_TEST === true && requestLog.protocol_address_key_identifier && !requestLog.protocol_address_key_identifier.startsWith('1')) {
+                                                                        ledgerGUIDKeyIdentifier[pendingPayment.ledger_guid] = requestLog.protocol_address_key_identifier;
+                                                                    }
                                                                     callback();
                                                                 }).catch(() => callback());
                                         }, () => {
