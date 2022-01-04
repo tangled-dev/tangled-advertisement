@@ -146,9 +146,12 @@ export default class Consumer {
     getRandomAdvertisement() {
         return new Promise((resolve, reject) => {
             return this.database.get(`SELECT *
-                                              FROM advertisement_consumer.advertisement_queue
-                                              ORDER BY RANDOM()
-                                              LIMIT 1`, [], (err, advertisement) => {
+                                      FROM advertisement_consumer.advertisement_queue
+                                      WHERE coalesce(count_impression, 0) =
+                                            (SELECT coalesce(count_impression, 0)
+                                             FROM advertisement_consumer.advertisement_queue)
+                                      ORDER BY RANDOM()
+                                      LIMIT 1`, [], (err, advertisement) => {
 
                 if (err) {
                     return reject(err);
@@ -158,6 +161,16 @@ export default class Consumer {
                     resolve({});
                 }
 
+                if (!advertisement.count_impression) {
+                    advertisement.count_impression = 1;
+                } else {
+                    advertisement.count_impression += 1;
+                }
+
+                this.database.run('UPDATE advertisement_consumer.advertisement_queue SET count_impression = ? WHERE queue_id = ?', [
+                    advertisement.count_impression,
+                    advertisement.queue_id
+                ], _ => _);
                 return this.fillAdvertisementAttributes(advertisement).then(resolve).catch(reject);
             });
         });
