@@ -21,7 +21,13 @@ export default class Advertiser {
                                    FROM advertisement_advertiser.advertisement_ledger
                                    WHERE advertisement_guid = ?1
                                      AND advertisement_request_guid = ?2)
-                                 AND advertisement_guid = ?1 AND status = 1`,
+                                 AND EXISTS(
+                                   SELECT advertisement_request_guid
+                                   FROM advertisement_advertiser.advertisement_request_log
+                                   WHERE advertisement_guid = ?1
+                                     AND advertisement_request_guid = ?2)
+                                 AND advertisement_guid = ?1
+                                 AND status = 1`,
                 [
                     advertisementGUID,
                     requestGUID
@@ -144,8 +150,10 @@ export default class Advertiser {
                                WHERE advertisement_guid NOT IN (
                                    SELECT advertisement_guid
                                    FROM advertisement_advertiser.advertisement_request_log
-                                   WHERE tangled_guid_consumer = ? AND status = 1
-                               ) AND status = 1`, [consumerGUID], (err, data) => {
+                                   WHERE tangled_guid_consumer = ?
+                                     AND status = 1
+                               )
+                                 AND status = 1`, [consumerGUID], (err, data) => {
                 if (err) {
                     return reject(err);
                 }
@@ -370,6 +378,21 @@ export default class Advertiser {
                       sql,
                       parameters
                   } = Database.buildQuery('SELECT * FROM advertisement_advertiser.advertisement_ledger', where, undefined, limit);
+            this.database.all(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve(data);
+            });
+        });
+    }
+
+    listAdvertisementLedgerMissingPayment(limit) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_ledger l JOIN advertisement_request_log r USING (advertisement_guid, advertisement_request_guid) WHERE l.tx_address_deposit_vout_md5 is NULL', undefined, undefined, limit);
             this.database.all(sql, parameters, (err, data) => {
                 if (err) {
                     return reject(err);
@@ -630,5 +653,41 @@ export default class Advertiser {
                        ledger_guid: ledgerGUID,
                        attributes
                    }));
+    }
+
+
+    pruneAdvertisementRequestWithNoPaymentRequestQueue(timestamp) {
+        // TODO: improve this sql statement
+        return new Promise((resolve, reject) => {
+            this.database.run(`DELETE
+                               FROM advertisement_advertiser.advertisement_request_log AS r
+                               WHERE create_date <= ?
+                                 AND NOT EXISTS (SELECT ledger_id FROM advertisement_advertiser.advertisement_ledger WHERE advertisement_request_guid = r.advertisement_request_guid
+                                 AND advertisement_guid = r.advertisement_guid)`, [timestamp], (err) => {
+                if (err) {
+                    console.log('[database] error', err);
+                    return reject(err);
+                }
+
+                resolve();
+            });
+        });
+    }
+
+    resetAd(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildUpdate('UPDATE advertisement_advertiser.advertisement_request_log', {status: 0}, where);
+            this.database.run(sql, parameters, (err) => {
+                if (err) {
+                    console.log('[database] error', err);
+                    return reject(err);
+                }
+
+                resolve();
+            });
+        });
     }
 }

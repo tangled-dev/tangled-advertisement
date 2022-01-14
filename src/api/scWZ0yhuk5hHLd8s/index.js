@@ -1,6 +1,7 @@
 import Endpoint from '../endpoint';
 import database, {Database} from '../../database/database';
 import config from '../../config/config';
+import peer from '../../network/peer';
 
 
 /**
@@ -9,7 +10,6 @@ import config from '../../config/config';
 class _scWZ0yhuk5hHLd8s extends Endpoint {
     constructor() {
         super('scWZ0yhuk5hHLd8s');
-        this.protocolAddressKeyIdentifier = null;
     }
 
     /**
@@ -59,15 +59,14 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
             });
         }
 
-        let pipeline = Promise.resolve();
-        if (this.protocolAddressKeyIdentifier === null) {
-            const walletRepository   = database.getRepository('wallet');
-            const keychainRepository = database.getRepository('keychain');
-            pipeline                 = pipeline.then(() => walletRepository.getWallet())
-                                               .then(wallet => keychainRepository.getWalletDefaultKeyIdentifier(wallet.wallet_id))
-                                               .then(addressKeyIdentifier => this.protocolAddressKeyIdentifier = addressKeyIdentifier);
+        if (peer.protocolAddressKeyIdentifier === null) {
+            return res.send({
+                api_status : 'fail',
+                api_message: `unexpected generic api error: (wallet not loaded)`
+            });
         }
 
+        let pipeline = Promise.resolve();
         pipeline.then(() => {
             const languageRepository   = database.getRepository('language');
             const advertiserRepository = database.getRepository('advertiser');
@@ -87,7 +86,7 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
             const targetLanguageUID         = Database.generateID(32);
             const advertisementType         = 'text_headline_deck';
             const expiration                = Math.floor(Math.random() * 10) * 86400;
-            const fundingAddress            = `${this.protocolAddressKeyIdentifier}0a0${this.protocolAddressKeyIdentifier}`;
+            const fundingAddress            = `${peer.protocolAddressKeyIdentifier}0a0${peer.protocolAddressKeyIdentifier}`;
 
             //todo: replace with actual data
             const budgetUSD        = Math.floor(Math.max(100, Math.random() * 1000));

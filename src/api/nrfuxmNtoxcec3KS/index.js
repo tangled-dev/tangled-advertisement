@@ -2,6 +2,7 @@ import Endpoint from '../endpoint';
 import database, {Database} from '../../database/database';
 import _ from 'lodash';
 import config from '../../config/config';
+import peer from '../../network/peer';
 
 
 /**
@@ -10,7 +11,6 @@ import config from '../../config/config';
 class _nrfuxmNtoxcec3KS extends Endpoint {
     constructor() {
         super('nrfuxmNtoxcec3KS');
-        this.protocolAddressKeyIdentifier = null;
     }
 
     /**
@@ -27,15 +27,14 @@ class _nrfuxmNtoxcec3KS extends Endpoint {
             });
         }
 
-        let pipeline = Promise.resolve();
-        if (this.protocolAddressKeyIdentifier === null) {
-            const walletRepository   = database.getRepository('wallet');
-            const keychainRepository = database.getRepository('keychain');
-            pipeline                 = pipeline.then(() => walletRepository.getWallet())
-                                               .then(wallet => keychainRepository.getWalletDefaultKeyIdentifier(wallet.wallet_id))
-                                               .then(addressKeyIdentifier => this.protocolAddressKeyIdentifier = addressKeyIdentifier);
+        if (peer.protocolAddressKeyIdentifier === null) {
+            return res.send({
+                api_status : 'fail',
+                api_message: `unexpected generic api error: (wallet not loaded)`
+            });
         }
 
+        let pipeline = Promise.resolve();
         pipeline.then(() => {
             const advertiserRepository      = database.getRepository('advertiser');
             const advertisementTypes        = [
@@ -84,7 +83,7 @@ class _nrfuxmNtoxcec3KS extends Endpoint {
             const advertisementCategory     = _.sample(advertisementCategories);
             const url                       = `https://www.${Database.generateID(32)}.com`;
             const name                      = `${advertisementCategory} - ${url}`;
-            const fundingAddress            = `${this.protocolAddressKeyIdentifier}0a0${this.protocolAddressKeyIdentifier}`;
+            const fundingAddress            = `${peer.protocolAddressKeyIdentifier}0a0${peer.protocolAddressKeyIdentifier}`;
             const budgetUSD                 = Math.floor(Math.max(100, Math.random() * 1000));
             const budgetMLX                 = Math.floor(budgetUSD * config.MILLIX_USD_VALUE);
             const bidImpressionUSD          = Math.max(0.1, Math.random()).toFixed(2);

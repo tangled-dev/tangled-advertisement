@@ -255,10 +255,10 @@ export class Peer {
         });
     }
 
-    requestAdvertisementPayment(advertisementGUID) {
+    requestAdvertisementPayment(queueID) {
         const consumerRepository = database.getRepository('consumer');
         consumerRepository.getAdvertisement({
-            advertisement_guid     : advertisementGUID,
+            queue_id               : queueID,
             protocol_transaction_id: null
         }).then(advertisement => {
             if (advertisement) {
@@ -292,7 +292,7 @@ export class Peer {
         mutex.lock(['payment'], unlock => {
             console.log(`[peer] processing advertisement payments`);
             const advertiserRepository = database.getRepository('advertiser');
-            advertiserRepository.listAdvertisementLedger({tx_address_deposit_vout_md5: null}, config.TRANSACTION_OUTPUT_MAX - 1)// max - 1 (output allocated to fee)
+            advertiserRepository.listAdvertisementLedgerMissingPayment(config.TRANSACTION_OUTPUT_MAX - 1) // max - 1 (output allocated to fee)
                                 .then(pendingPaymentList => {
                                     return new Promise(resolve => {
                                         const ledgerGUIDKeyIdentifier = {};
@@ -372,9 +372,19 @@ export class Peer {
 
     pruneAdvertisementQueue() {
         console.log('[peer] prune advertisement queue from consumer database');
-        const pruneOlderThanTimestamp = Math.floor(Date.now() / 1000 - config.ADS_PRUNE_AGE); // 2 days old
-        const consumerRepository = database.getRepository('consumer');
-        return consumerRepository.pruneAdvertisementQueue(pruneOlderThanTimestamp);
+        let pruneOlderThanTimestamp = Math.floor(Date.now() / 1000 - config.ADS_PRUNE_AGE); // 2 days old
+        const consumerRepository    = database.getRepository('consumer');
+        consumerRepository.pruneAdvertisementQueue(pruneOlderThanTimestamp);
+
+        pruneOlderThanTimestamp = Math.floor(Date.now() / 1000 - 600); // 10 min
+        return consumerRepository.pruneAdvertisementRequestWithNoPaymentRequestQueue(pruneOlderThanTimestamp);
+    }
+
+    pruneAdvertisementRequestWithNoPaymentRequestQueue() {
+        console.log('[peer] prune advertisement request with no payment request in the last 60 seconds');
+        const pruneOlderThanTimestamp = Math.floor(Date.now() / 1000 - 600);
+        const advertiserRepository    = database.getRepository('advertiser');
+        return advertiserRepository.pruneAdvertisementRequestWithNoPaymentRequestQueue(pruneOlderThanTimestamp);
     }
 
     initialize() {
@@ -389,13 +399,15 @@ export class Peer {
         task.scheduleTask('peer-request-advertisement', () => this.requestAdvertisement(), 10000);
         task.scheduleTask('advertisement-payment-process', () => this.processAdvertisementPayment(), 10000);
         task.scheduleTask('advertisement-queue-prune', () => this.pruneAdvertisementQueue(), 60000);
-        const walletRepository   = database.getRepository('wallet');
-        const keychainRepository = database.getRepository('keychain');
-        return walletRepository.getWallet()
-                               .then(wallet => keychainRepository.getWalletDefaultKeyIdentifier(wallet.wallet_id))
-                               .then(addressKeyIdentified => {
-                                   this.protocolAddressKeyIdentifier = addressKeyIdentified;
-                               });
+        task.scheduleTask('advertisement-request-no-payment-request-prune', () => this.pruneAdvertisementRequestWithNoPaymentRequestQueue(), 60000);
+        return client.getWalletInformation()
+                     .then(data => {
+                         if(data.api_status === 'success') {
+                             this.protocolAddressKeyIdentifier = data.wallet.address_key_identifier;
+                         } else {
+                             return Promise.reject(data);
+                         }
+                     });
     }
 
     stop() {
@@ -407,6 +419,7 @@ export class Peer {
         task.removeTask('peer-request-advertisement');
         task.removeTask('advertisement-payment-process');
         task.removeTask('advertisement-queue-prune');
+        task.removeTask('advertisement-request-no-payment-request-prune');
     }
 }
 

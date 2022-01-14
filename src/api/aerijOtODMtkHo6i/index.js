@@ -1,5 +1,6 @@
 import Endpoint from '../endpoint';
 import database from '../../database/database';
+import peer from '../../network/peer';
 
 
 /**
@@ -9,7 +10,6 @@ import database from '../../database/database';
 class _aerijOtODMtkHo6i extends Endpoint {
     constructor() {
         super('aerijOtODMtkHo6i');
-        this.protocolAddressKeyIdentifier = null;
     }
 
     /**
@@ -19,19 +19,18 @@ class _aerijOtODMtkHo6i extends Endpoint {
      * @param res
      */
     handler(app, req, res) {
-        let pipeline = Promise.resolve();
 
-        if (this.protocolAddressKeyIdentifier === null) {
-            const walletRepository   = database.getRepository('wallet');
-            const keychainRepository = database.getRepository('keychain');
-            pipeline                 = pipeline.then(() => walletRepository.getWallet())
-                                               .then(wallet => keychainRepository.getWalletDefaultKeyIdentifier(wallet.wallet_id))
-                                               .then(addressKeyIdentifier => this.protocolAddressKeyIdentifier = addressKeyIdentifier);
+        if (peer.protocolAddressKeyIdentifier === null) {
+            return res.send({
+                api_status : 'fail',
+                api_message: `unexpected generic api error: (wallet not loaded)`
+            });
         }
 
+        let pipeline = Promise.resolve();
         pipeline.then(() => {
             const advertiserRepository = database.getRepository('advertiser');
-            const fundingAddress       = `${this.protocolAddressKeyIdentifier}0a0${this.protocolAddressKeyIdentifier}`;
+            const fundingAddress       = `${peer.protocolAddressKeyIdentifier}0a0${peer.protocolAddressKeyIdentifier}`;
             return advertiserRepository.getAdvertisementByProtocolAddressFunding(fundingAddress).then(advertisement => res.send({
                     api_status        : 'ok',
                     api_message       : 'fetch successfull',

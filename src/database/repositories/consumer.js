@@ -38,7 +38,7 @@ export default class Consumer {
 
         advertisement.attributes.forEach(attribute => {
             statements.push([
-                `INSERT INTO advertisement_consumer.advertisement_attribute
+                `INSERT OR IGNORE INTO advertisement_consumer.advertisement_attribute
                  (advertisement_attribute_guid,
                   advertisement_guid,
                   attribute_type_guid,
@@ -143,13 +143,27 @@ export default class Consumer {
         });
     }
 
+    processRandomAdvertisement(advertisement) {
+        if (!advertisement.count_impression) {
+            advertisement.count_impression = 1;
+        }
+        else {
+            advertisement.count_impression += 1;
+        }
+
+        this.database.run('UPDATE advertisement_consumer.advertisement_queue SET count_impression = ? WHERE queue_id = ?', [
+            advertisement.count_impression,
+            advertisement.queue_id
+        ], _ => _);
+
+        return this.fillAdvertisementAttributes(advertisement);
+    }
+
     getRandomAdvertisement() {
         return new Promise((resolve, reject) => {
             return this.database.get(`SELECT *
                                       FROM advertisement_consumer.advertisement_queue
-                                      WHERE coalesce(count_impression, 0) =
-                                            (SELECT coalesce(count_impression, 0)
-                                             FROM advertisement_consumer.advertisement_queue)
+                                      WHERE count_impression IS NULL
                                       ORDER BY RANDOM()
                                       LIMIT 1`, [], (err, advertisement) => {
 
@@ -158,20 +172,24 @@ export default class Consumer {
                 }
 
                 if (!advertisement) {
-                    resolve({});
+                    return this.database.get(`SELECT *
+                                              FROM advertisement_consumer.advertisement_queue
+                                              ORDER BY RANDOM()
+                                              LIMIT 1`, [], (err, advertisement) => {
+
+                        if (err) {
+                            return reject(err);
+                        }
+
+                        if (!advertisement) {
+                            return resolve({});
+                        }
+
+                        return this.processRandomAdvertisement(advertisement).then(resolve).catch(reject);
+                    });
                 }
 
-                if (!advertisement.count_impression) {
-                    advertisement.count_impression = 1;
-                } else {
-                    advertisement.count_impression += 1;
-                }
-
-                this.database.run('UPDATE advertisement_consumer.advertisement_queue SET count_impression = ? WHERE queue_id = ?', [
-                    advertisement.count_impression,
-                    advertisement.queue_id
-                ], _ => _);
-                return this.fillAdvertisementAttributes(advertisement).then(resolve).catch(reject);
+                return this.processRandomAdvertisement(advertisement).then(resolve).catch(reject);
             });
         });
     }
@@ -216,31 +234,53 @@ export default class Consumer {
     }
 
 
-    pruneAdvertisementQueue(timestamp) {
+    pruneAdvertisementRequestWithNoPaymentRequestQueue(timestamp) {
         return new Promise((resolve, reject) => {
-            this.database.all('SELECT * FROM advertisement_consumer.advertisement_queue WHERE create_date <= ? LIMIT 1000', [timestamp], (err, data) => {
+            this.database.run(`DELETE
+                               FROM advertisement_consumer.advertisement_queue
+                               WHERE create_date <= ? AND protocol_transaction_id IS NULL`, [timestamp], (err) => {
                 if (err) {
                     console.log('[database] error', err);
                     return reject(err);
                 }
 
-                const advertisementGUIDListToRemove = data.map(advertisement => advertisement.advertisement_guid);
                 this.database.run(`DELETE
                                    FROM advertisement_consumer.advertisement_attribute
-                                   WHERE advertisement_guid in (${advertisementGUIDListToRemove.map(() => '?').join(',')}`, advertisementGUIDListToRemove, (err) => {
+                                   WHERE advertisement_guid NOT IN
+                                         (SELECT advertisement_guid
+                                          FROM advertisement_consumer.advertisement_queue)`, (err) => {
                     if (err) {
                         console.log('[database] error', err);
                         return reject(err);
                     }
 
-                    this.database.run(`DELETE
-                                       FROM advertisement_consumer.advertisement_queue
-                                       WHERE advertisement_guid in (${advertisementGUIDListToRemove.map(() => '?').join(',')}`, advertisementGUIDListToRemove, (err) => {
-                        if (err) {
-                            console.log('[database] error', err);
-                            return reject(err);
-                        }
-                    });
+                    resolve();
+                });
+            });
+        });
+    }
+
+    pruneAdvertisementQueue(timestamp) {
+        return new Promise((resolve, reject) => {
+            this.database.run(`DELETE
+                               FROM advertisement_consumer.advertisement_queue
+                               WHERE create_date <= ?`, [timestamp], (err) => {
+                if (err) {
+                    console.log('[database] error', err);
+                    return reject(err);
+                }
+
+                this.database.run(`DELETE
+                                   FROM advertisement_consumer.advertisement_attribute
+                                   WHERE advertisement_guid NOT IN
+                                         (SELECT advertisement_guid
+                                          FROM advertisement_consumer.advertisement_queue)`, (err) => {
+                    if (err) {
+                        console.log('[database] error', err);
+                        return reject(err);
+                    }
+
+                    resolve();
                 });
             });
         });

@@ -18,15 +18,15 @@ class _QYEgbWuFZs5s7Kud extends Endpoint {
      * @param res
      */
     handler(app, req, res) {
-        const {p0: advertisementGUID} = req.query;
+        const {p0: queueID} = req.query;
 
-        if (!advertisementGUID) {
+        if (!queueID) {
             return res.status(400).send({
                 api_status: 'fail',
-                api_message: `advertisement_guid is required`
+                api_message: `queue_id is required`
             });
         }
-        peer.requestAdvertisementPayment(advertisementGUID);
+        peer.requestAdvertisementPayment(queueID);
         res.send({
             api_status : 'success',
             api_message: 'payment request sent'

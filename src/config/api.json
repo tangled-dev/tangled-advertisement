@@ -98,6 +98,15 @@
       "version_released": "1.0.0",
       "permission": "{\"require_identity\": false, \"private\": false}",
       "enable": true
+    },
+    {
+      "id": "pKZdzEZrrdPA1jtl",
+      "name": "reset_ad",
+      "description": "reset add",
+      "method": "GET",
+      "version_released": "1.0.0",
+      "permission": "{\"require_identity\": false, \"private\": false}",
+      "enable": true
     }
   ]
 }
