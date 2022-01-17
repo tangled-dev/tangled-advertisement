@@ -291,9 +291,11 @@ export class Peer {
     processAdvertisementPayment() {
         mutex.lock(['payment'], unlock => {
             console.log(`[peer] processing advertisement payments`);
+            let maxOutputReached = false;
             const advertiserRepository = database.getRepository('advertiser');
             advertiserRepository.listAdvertisementLedgerMissingPayment(config.TRANSACTION_OUTPUT_MAX - 1) // max - 1 (output allocated to fee)
                                 .then(pendingPaymentList => {
+                                    maxOutputReached = pendingPaymentList.length === config.TRANSACTION_OUTPUT_MAX - 1;
                                     return new Promise(resolve => {
                                         const ledgerGUIDKeyIdentifier = {};
                                         async.eachSeries(pendingPaymentList, (pendingPayment, callback) => {
@@ -362,7 +364,12 @@ export class Peer {
                                     };
                                     this.propagateRequest('advertisement_payment_response', message);
                                 })
-                                .then(() => unlock())
+                                .then(() => {
+                                    unlock();
+                                    if(maxOutputReached) {
+                                        setTimeout(() => this.pruneAdvertisementQueue(), 10000);
+                                    }
+                                })
                                 .catch(err => {
                                     console.log(`[peer] error processing payments:`, err);
                                     unlock();
@@ -397,7 +404,7 @@ export class Peer {
         //out
         eventBus.on('peer_connection', (ws) => this.notifyNewPeer(ws));
         task.scheduleTask('peer-request-advertisement', () => this.requestAdvertisement(), 10000);
-        task.scheduleTask('advertisement-payment-process', () => this.processAdvertisementPayment(), 10000);
+        task.scheduleTask('advertisement-payment-process', () => this.processAdvertisementPayment(), 60000);
         task.scheduleTask('advertisement-queue-prune', () => this.pruneAdvertisementQueue(), 60000);
         task.scheduleTask('advertisement-request-no-payment-request-prune', () => this.pruneAdvertisementRequestWithNoPaymentRequestQueue(), 60000);
         return client.getWalletInformation()
