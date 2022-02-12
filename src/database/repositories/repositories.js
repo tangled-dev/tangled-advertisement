@@ -7,7 +7,9 @@ import Advertiser from './advertiser';
 import Consumer from './consumer';
 import Keychain from './keychain';
 import Wallet from './wallet';
+import Config from './config';
 
 export {
-    Advertiser, Consumer, Node, Schema, API, Normalization, Language, Wallet, Keychain
+    Advertiser, Consumer, Node, Schema, API, Normalization, Language, Wallet, Keychain,
+    Config
 };

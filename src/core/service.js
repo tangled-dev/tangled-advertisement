@@ -2,6 +2,7 @@ import api from '../api/server';
 import database from '../database/database';
 import network from '../network/network';
 import peer from '../network/peer';
+import configLoader from '../config/config-loader';
 
 
 class Service {
@@ -15,6 +16,7 @@ class Service {
         }
         this.initialized = true;
         return database.initialize()
+                       .then(() => configLoader.load())
                        .then(() => database.checkup())
                        .then(() => network.initialize())
                        .then(() => peer.initialize())

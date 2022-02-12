@@ -59,6 +59,16 @@ CREATE TABLE language(
                          create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
 );
 
+CREATE TABLE config
+(
+    config_id   CHAR(20)     NOT NULL PRIMARY KEY CHECK (length(config_id) <= 20),
+    config_name TEXT         NOT NULL UNIQUE,
+    value       TEXT         NOT NULL,
+    type        TEXT         NOT NULL,
+    status      SMALLINT     NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
+    create_date INT          NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK(length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
+);
+CREATE INDEX idx_config_create_date ON config (create_date);
 
 INSERT INTO language (language_code, language_guid, language_name, language_name_native, list_order) VALUES ('en', '49015ffef', 'english', 'english', 10);
 INSERT INTO language (language_code, language_guid, language_name, language_name_native, list_order) VALUES ('ht', 'e987aba70', 'haitian', 'ayisyen', 20);
@@ -169,6 +179,6 @@ INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('techn
 INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('technology - phone', 'NQ2JTh96P');
 INSERT INTO normalization (normalization_name, normalization_id) VALUES  ('technology - service', '884LpvLlG');
 
-INSERT INTO schema_information (key, value) VALUES ("version", "3");
+INSERT INTO schema_information (key, value) VALUES ("version", "4");
 
 COMMIT;

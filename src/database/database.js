@@ -1,5 +1,8 @@
 import config from '../config/config';
-import {Advertiser, API, Consumer, Keychain, Language, Node, Normalization, Schema, Wallet} from './repositories/repositories';
+import {
+    Advertiser, API, Consumer, Keychain, Language, Node, Normalization, Schema,
+    Wallet, Config
+} from './repositories/repositories';
 import mutex from '../core/mutex';
 import eventBus from '../core/event-bus';
 import fs from 'fs';
@@ -383,6 +386,7 @@ export class Database {
         this.repositories['api']           = new API(this.database);
         this.repositories['keychain']      = new Keychain(this.database);
         this.repositories['wallet']        = new Wallet(this.database);
+        this.repositories['config']        = new Config(this.database);
 
         this.repositories['node'] = new Node(this.database);
         this.repositories['node'].setNormalizationRepository(this.repositories['normalization']);
