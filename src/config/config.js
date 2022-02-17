@@ -85,7 +85,7 @@ if (DATABASE_ENGINE === 'sqlite') {
     DATABASE_CONNECTION.FILENAME_ADVERTISER_ADVERTISEMENT = 'tangled-advertisement-advertiser.sqlite';
     DATABASE_CONNECTION.FILENAME_CONSUMER_ADVERTISEMENT   = 'tangled-advertisement-consumer.sqlite';
     DATABASE_CONNECTION.FILENAME_MILLIX_NODE              = 'millix.sqlite';
-    DATABASE_CONNECTION.SCHEMA_VERSION                    = '4';
+    DATABASE_CONNECTION.SCHEMA_VERSION                    = '5';
 }
 
 export default {

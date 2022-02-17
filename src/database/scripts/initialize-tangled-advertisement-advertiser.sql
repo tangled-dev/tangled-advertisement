@@ -112,7 +112,7 @@ CREATE TABLE advertisement_request_log
     status smallint NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'), -- (0=not settled, 1=settled)
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
 );
-
+CREATE INDEX idx_advertisement_request_log_advertisement_request ON advertisement_request_log ("advertisement_guid", "advertisement_request_guid");
 
 -- replace click log with umbrella table
 -- advertisement_engagement_log
