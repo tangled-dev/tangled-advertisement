@@ -80,7 +80,7 @@ CREATE TABLE advertisement_consumer.new_advertisement_ledger
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer'),
     UNIQUE(advertisement_guid, advertisement_request_guid, transaction_type_guid)
 );
-CREATE INDEX idx_advertisement_ledger_advertisement_request ON advertisement_consumer.advertisement_ledger ("advertisement_guid", "advertisement_request_guid");
+CREATE INDEX advertisement_consumer.idx_advertisement_ledger_advertisement_request ON advertisement_ledger ("advertisement_guid", "advertisement_request_guid");
 
 INSERT INTO advertisement_advertiser.new_advertisement_ledger SELECT * FROM advertisement_advertiser.advertisement_ledger;
 DROP TABLE advertisement_advertiser.advertisement_ledger;
