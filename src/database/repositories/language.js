@@ -1,4 +1,5 @@
 import {Database} from '../database';
+import _ from 'lodash';
 
 export default class Language {
     constructor(database) {

@@ -6,14 +6,17 @@ import config, {MODE_TEST} from '../config/config';
 import async from 'async';
 import mutex from '../core/mutex';
 import client from '../api/client';
+import cache from '../core/cache';
 
 
 export class Peer {
     constructor() {
         this._proxyAdvertisementRequestQueue    = {};
+        this._proxyAdvertisementSyncQueue       = {};
         this._advertisementPaymentRequestQueue  = {};
         this._advertisementPaymentResponseQueue = {};
         this._advertisementRequestQueue         = {};
+        this._advertisementSyncQueue            = {};
         this.protocolAddressKeyIdentifier       = null;
     }
 
@@ -47,6 +50,35 @@ export class Peer {
         });
     }
 
+    _onSyncAdvertisement(data) {
+        if (this._proxyAdvertisementSyncQueue[data.request_guid]) {
+            const ws      = this._proxyAdvertisementSyncQueue[data.request_guid].ws;
+            const payload = {
+                type   : 'advertisement_sync',
+                content: data
+            };
+            ws.send(JSON.stringify(payload));
+            return;
+        }
+        else if (!this._advertisementSyncQueue[data.request_guid]) {
+            return;
+        }
+
+        const {
+                  advertisement_list: advertisements,
+                  node_id           : nodeID,
+                  node_ip_address   : nodeIPAddress,
+                  node_port         : nodePort
+              } = data;
+        console.log(`[peer] new advertisements ${JSON.stringify(advertisements, null, 4)}`);
+        const consumerRepository = database.getRepository('consumer');
+        async.eachSeries(advertisements, (advertisement, callback) => {
+            consumerRepository.addAdvertisement(advertisement, nodeID, nodeIPAddress, nodePort, advertisement.advertisement_request_guid)
+                              .then(() => callback())
+                              .catch(() => callback());
+        });
+    }
+
     _onNewPeer(peer, ws) {
         eventBus.emit('tangled_event_log', {
             type   : 'new_peer',
@@ -55,6 +87,40 @@ export class Peer {
         });
 
         network.addNode(peer.node_prefix, peer.node_address, peer.node_port, peer.node_id);
+    }
+
+    _onAdvertisementSyncRequest(data, ws) {
+        if (this._proxyAdvertisementSyncQueue[data.request_guid] || this._advertisementSyncQueue[data.request_guid]) {
+            return;
+        }
+
+        this._proxyAdvertisementSyncQueue[data.request_guid] = {
+            timestamp: Date.now(),
+            ws
+        };
+
+        this.propagateRequest('advertisement_sync_request', data, ws);
+
+        const advertiserRepository = database.getRepository('advertiser');
+        advertiserRepository.listConsumerActiveAdvertisement(data.node_id)
+                            .then(advertisements => {
+                                console.log(`[peer] found ${advertisements.length} sync advertisements to peer ${data.node_id}`);
+                                if (advertisements.length === 0) {
+                                    return;
+                                }
+
+                                const payload = {
+                                    type   : 'advertisement_sync',
+                                    content: {
+                                        node_id           : network.nodeID,
+                                        node_ip_address   : network.nodePublicIp,
+                                        node_port         : config.NODE_PORT,
+                                        request_guid      : data.request_guid,
+                                        advertisement_list: advertisements
+                                    }
+                                };
+                                ws.send(JSON.stringify(payload));
+                            });
     }
 
     _onAdvertisementRequest(data, ws) {
@@ -101,6 +167,30 @@ export class Peer {
                             });
     }
 
+    sendPeerList(ws) {
+        for (let peerWS of network.registeredClients) {
+            const payload = {
+                type   : 'new_peer',
+                content: {
+                    node_id     : peerWS.nodeID,
+                    node_prefix : peerWS.nodePrefix,
+                    node_address: peerWS.nodeIPAddress,
+                    node_port   : peerWS.nodePort
+                }
+            };
+            try {
+                const data = JSON.stringify(payload);
+                ws.send(data);
+            }
+            catch (e) {
+                console.log('[WARN]: try to send data over a closed connection.');
+                ws && ws.close();
+                network._unregisterWebsocket(ws);
+                return;
+            }
+        }
+    }
+
     notifyNewPeer(ws) {
         const payload = {
             type   : 'new_peer',
@@ -112,6 +202,38 @@ export class Peer {
             }
         };
         const data    = JSON.stringify(payload);
+        network.registeredClients.forEach(ws => {
+            const key = `peer_notify_${ws.nodeID}_${payload.content.node_id}`;
+            if (cache.getCacheItem('peer', key)) {
+                return;
+            }
+            cache.setCacheItem('peer', key, true, Number.MAX_SAFE_INTEGER);
+            try {
+                ws.send(data);
+            }
+            catch (e) {
+                console.log('[WARN]: try to send data over a closed connection.');
+                ws && ws.close();
+                network._unregisterWebsocket(ws);
+            }
+        });
+    }
+
+    // sync active advertisement to the current consumer
+    requestAdvertisementSync() {
+        const requestID                         = Database.generateID(32);
+        this._advertisementSyncQueue[requestID] = {
+            timestamp: Date.now()
+        };
+        const payload                           = {
+            type   : 'advertisement_sync_request',
+            content: {
+                node_id     : network.nodeID,
+                request_guid: requestID
+            }
+        };
+        const data                              = JSON.stringify(payload);
+
         network.registeredClients.forEach(ws => {
             try {
                 ws.send(data);
@@ -291,7 +413,7 @@ export class Peer {
     processAdvertisementPayment() {
         mutex.lock(['payment'], unlock => {
             console.log(`[peer] processing advertisement payments`);
-            let maxOutputReached = false;
+            let maxOutputReached       = false;
             const advertiserRepository = database.getRepository('advertiser');
             advertiserRepository.listAdvertisementLedgerMissingPayment(config.TRANSACTION_OUTPUT_MAX - 1) // max - 1 (output allocated to fee)
                                 .then(pendingPaymentList => {
@@ -366,8 +488,8 @@ export class Peer {
                                 })
                                 .then(() => {
                                     unlock();
-                                    if(maxOutputReached) {
-                                        setTimeout(() => this.pruneAdvertisementQueue(), 10000);
+                                    if (maxOutputReached) {
+                                        setTimeout(() => this.processAdvertisementPayment(), 10000);
                                     }
                                 })
                                 .catch(err => {
@@ -398,20 +520,28 @@ export class Peer {
         //in
         eventBus.on('new_peer', this._onNewPeer.bind(this));
         eventBus.on('advertisement_request', this._onAdvertisementRequest.bind(this));
+        eventBus.on('advertisement_sync_request', this._onAdvertisementSyncRequest.bind(this));
         eventBus.on('advertisement_payment_request', this._onAdvertisementPaymentRequest.bind(this));
         eventBus.on('advertisement_payment_response', this._onAdvertisementPaymentResponse.bind(this));
         eventBus.on('advertisement_new', this._onNewAdvertisement.bind(this));
+        eventBus.on('advertisement_sync', this._onSyncAdvertisement.bind(this));
+
         //out
-        eventBus.on('peer_connection', (ws) => this.notifyNewPeer(ws));
+        eventBus.on('peer_connection', (ws) => {
+            this.sendPeerList(ws);
+            this.notifyNewPeer(ws);
+        });
         task.scheduleTask('peer-request-advertisement', () => this.requestAdvertisement(), 10000);
+        task.scheduleTask('peer-sync-advertisement', () => this.requestAdvertisementSync(), 600000);
         task.scheduleTask('advertisement-payment-process', () => this.processAdvertisementPayment(), 60000);
         task.scheduleTask('advertisement-queue-prune', () => this.pruneAdvertisementQueue(), 60000);
         task.scheduleTask('advertisement-request-no-payment-request-prune', () => this.pruneAdvertisementRequestWithNoPaymentRequestQueue(), 60000);
         return client.getWalletInformation()
                      .then(data => {
-                         if(data.api_status === 'success') {
+                         if (data.api_status === 'success') {
                              this.protocolAddressKeyIdentifier = data.wallet.address_key_identifier;
-                         } else {
+                         }
+                         else {
                              return Promise.reject(data);
                          }
                      });
@@ -420,10 +550,12 @@ export class Peer {
     stop() {
         eventBus.removeAllListeners('new_peer');
         eventBus.removeAllListeners('advertisement_request');
+        eventBus.removeAllListeners('advertisement_sync');
         eventBus.removeAllListeners('advertisement_payment_request');
         eventBus.removeAllListeners('advertisement_payment_response');
         eventBus.removeAllListeners('peer_connection');
         task.removeTask('peer-request-advertisement');
+        task.removeTask('peer-sync-advertisement');
         task.removeTask('advertisement-payment-process');
         task.removeTask('advertisement-queue-prune');
         task.removeTask('advertisement-request-no-payment-request-prune');

@@ -1,4 +1,5 @@
 export const DEBUG                       = false;
+export const DEBUG_LOG_FILTER            = [];
 export const MODE_TEST                   = false;
 export const VERSION                     = '1.0.0';
 export const NAME                        = 'tangled-advertisement';
@@ -16,7 +17,7 @@ export const TRANSACTION_ADDRESS_VERSION = MODE_TEST ? 'lal' : '0a0';
 export const TRANSACTION_OUTPUT_MAX      = 20;
 export const TRANSACTION_PROXY_FEE       = 1000;
 export const ADS_TRANSACTION_AMOUNT_MAX  = 999999999;
-export const ADS_PRUNE_AGE = 172800; // 2 days old
+export const ADS_PRUNE_AGE               = 86400; // 1 days old
 export const MILLIX_USD_VALUE            = 100000000 / 56; /*TODO: get this from an external api like fiatleak*/
 
 export const NODE_INITIAL_LIST         = [
@@ -85,7 +86,7 @@ if (DATABASE_ENGINE === 'sqlite') {
     DATABASE_CONNECTION.FILENAME_ADVERTISER_ADVERTISEMENT = 'tangled-advertisement-advertiser.sqlite';
     DATABASE_CONNECTION.FILENAME_CONSUMER_ADVERTISEMENT   = 'tangled-advertisement-consumer.sqlite';
     DATABASE_CONNECTION.FILENAME_MILLIX_NODE              = 'millix.sqlite';
-    DATABASE_CONNECTION.SCHEMA_VERSION                    = '5';
+    DATABASE_CONNECTION.SCHEMA_VERSION                    = '6';
 }
 
 export default {
@@ -107,6 +108,7 @@ export default {
     DATABASE_CONNECTION,
     WEBSOCKET_PROTOCOL,
     NODE_INITIAL_LIST,
+    DEBUG_LOG_FILTER,
     NODE_HOST_FORCE,
     NODE_PORT_API,
     ADS_PRUNE_AGE,

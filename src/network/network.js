@@ -11,6 +11,7 @@ import util from 'util';
 import dns from 'dns';
 import NatAPI from 'nat-api';
 import task from '../core/task';
+import cache from '../core/cache';
 import Utils from '../core/utils';
 import client from '../api/client';
 
@@ -79,11 +80,17 @@ class Network {
             return Promise.reject();
         }
 
+        const url = prefix + ipAddress + ':' + port;
+
+        if (cache.getCacheItem('network', `network_error_${url}`)) {
+            return Promise.reject();
+        }
+
         return new Promise((resolve, reject) => {
 
-            let url = prefix + ipAddress + ':' + port;
-
-            if (!url || this._selfConnectionNode.has(url) || (id && this._nodeRegistry[id])) {
+            if (!url ||
+                this._selfConnectionNode.has(url) ||
+                (id && this._nodeRegistry[id])) {
                 return reject(this._selfConnectionNode.has(url) ? 'self-connection' : `node ${id} is already connected`);
             }
 
@@ -129,6 +136,7 @@ class Network {
                 // distinguish connection errors from later errors that occur
                 // on open connection
                 if (!ws.outBound) {
+                    cache.setCacheItem('network', `network_error_${url}`, true, 600000); //wait 10 min
                     return reject('there was an error in the connection,' + e);
                 }
 
@@ -376,7 +384,8 @@ class Network {
         if (this._connectionRegistry[connectionID]) {
             this._connectionRegistry[connectionID].push(ws);
             console.log('[network] node ' + ws.node + ' already registered with connection id ' + connectionID);
-            return ws.close(1000, 'self-connection');
+            cache.setCacheItem('network', `network_error_${ws.node}`, true, 600000); //wait 10 min
+            return ws.close(1000, 'new_connection_rejected');
         }
         else {
             console.log('[network] node ' + ws.node + ' registered with connection id ' + connectionID);

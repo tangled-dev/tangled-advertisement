@@ -47,7 +47,7 @@ class Client {
                         resolve(typeof body === 'string' ? JSON.parse(body) : body);
                     }
                     else {
-                        reject(body);
+                        reject(error && error.message || JSON.parse(body));
                     }
                 }
             );

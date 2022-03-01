@@ -1,6 +1,7 @@
 import {Database} from '../database';
 import config from '../../config/config';
 import objectHash from '../../core/crypto/object-hash';
+import _ from 'lodash'
 
 export default class Advertiser {
     constructor(database) {
@@ -176,6 +177,65 @@ export default class Advertiser {
                         bid_impression_mlx      : advertisement.bid_impression_mlx,
                         expiration              : advertisement.expiration,
                         attributes              : []
+                    };
+                });
+
+                const advertisementGUIDs = _.keys(advertisements);
+                this.database.all(`SELECT *
+                                   FROM advertisement_advertiser.advertisement_attribute
+                                   WHERE advertisement_guid IN (${advertisementGUIDs.map(() => '?').join(',')})`, advertisementGUIDs, (err, data) => {
+                    if (err) {
+                        return reject(err);
+                    }
+
+                    data.forEach(attribute => {
+                        advertisements[attribute.advertisement_guid].attributes.push({
+                            attribute_guid: attribute.advertisement_attribute_guid,
+                            attribute_type: this.normalizationRepository.getType(attribute.attribute_type_guid),
+                            object        : this.normalizationRepository.getType(attribute.object_guid),
+                            value         : attribute.value
+                        });
+                    });
+
+                    resolve(_.values(advertisements));
+                });
+
+            });
+        });
+    }
+
+    listConsumerActiveAdvertisement(consumerGUID) {
+        return new Promise((resolve, reject) => {
+            this.database.all(`SELECT a.*, r.advertisement_request_guid
+                               FROM advertisement_advertiser.advertisement_request_log r
+                                        INNER JOIN advertisement_advertiser.advertisement a
+                                                   USING (advertisement_guid)
+                               WHERE r.tangled_guid_consumer = ?
+                                 AND r.status = 1
+                                 AND a.status = 1`, [consumerGUID], (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+
+                if (data.length === 0) {
+                    return resolve(data);
+                }
+                const advertisements = {};
+                data.forEach(advertisement => {
+                    advertisements[advertisement.advertisement_guid] = {
+                        advertisement_request_guid: advertisement.advertisement_request_guid,
+                        advertisement_guid        : advertisement.advertisement_guid,
+                        advertisement_type        : this.normalizationRepository.getType(advertisement.advertisement_type_guid),
+                        advertisement_category    : this.normalizationRepository.getType(advertisement.advertisement_category_guid),
+                        advertisement_name        : advertisement.advertisement_name,
+                        advertisement_url         : advertisement.advertisement_url,
+                        protocol_address_funding  : advertisement.protocol_address_funding,
+                        budget_daily_usd          : advertisement.budget_daily_usd,
+                        budget_daily_mlx          : advertisement.budget_daily_mlx,
+                        bid_impression_usd        : advertisement.bid_impression_usd,
+                        bid_impression_mlx        : advertisement.bid_impression_mlx,
+                        expiration                : advertisement.expiration,
+                        attributes                : []
                     };
                 });
 
@@ -662,8 +722,11 @@ export default class Advertiser {
             this.database.run(`DELETE
                                FROM advertisement_advertiser.advertisement_request_log AS r
                                WHERE create_date <= ?
-                                 AND NOT EXISTS (SELECT ledger_id FROM advertisement_advertiser.advertisement_ledger WHERE advertisement_request_guid = r.advertisement_request_guid
-                                 AND advertisement_guid = r.advertisement_guid)`, [timestamp], (err) => {
+                                 AND NOT EXISTS(SELECT ledger_id
+                                                FROM advertisement_advertiser.advertisement_ledger
+                                                WHERE advertisement_request_guid =
+                                                      r.advertisement_request_guid
+                                                  AND advertisement_guid = r.advertisement_guid)`, [timestamp], (err) => {
                 if (err) {
                     console.log('[database] error', err);
                     return reject(err);

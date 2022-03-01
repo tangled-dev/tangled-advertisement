@@ -22,7 +22,7 @@ class Service {
                        .then(() => peer.initialize())
                        .then(() => api.initialize())
                        .catch(e => {
-                           console.log(`[service] ${e.message}`);
+                           console.log(`[service] ${e && (e.message || e.api_message) || e}`);
                            this.initialized = false;
                            return new Promise(resolve => setTimeout(() => this.initialize(options).then(resolve), 5000));
                        });

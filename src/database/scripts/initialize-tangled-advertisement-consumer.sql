@@ -17,7 +17,7 @@ CREATE TABLE advertisement_queue
     port_advertiser varchar(10),
     creative_request_guid char(32),
     bid_impression_mlx bigint(16),
-    impression_guid, -- (md5 shared with advertiser to confirm the record has not been altered by the consumer)
+    impression_guid char(32), -- (md5 shared with advertiser to confirm the record has not been altered by the consumer)
     advertisement_url varchar(2048),
     protocol_transaction_id varchar(128), -- (populated when the advertisement has settled)
     protocol_output_position int(11),
@@ -25,7 +25,8 @@ CREATE TABLE advertisement_queue
     count_impression smallint,
     expiration timestamp,
     status smallint NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
-    create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
+    create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer'),
+    UNIQUE (advertisement_guid, creative_request_guid)
 );
 
 -- advertisement_attribute

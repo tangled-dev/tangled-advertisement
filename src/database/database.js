@@ -313,7 +313,7 @@ export class Database {
                 return reject('millix database was not found');
             }
 
-            this.databaseConsumer = new sqlite3.Database(dbFile, (err) => {
+            this.databaseMillix = new sqlite3.Database(dbFile, (err) => {
                 if (err) {
                     return reject(err.message);
                 }

@@ -1,6 +1,7 @@
 import logger from './core/logger';
 import service from './core/service';
 import config from './config/config';
+import console from './core/console';
 import eventBus from './core/event-bus';
 
 const argv = require('yargs')
@@ -63,4 +64,4 @@ if (!argv.natPmp) {
 logger.log('tangled advertisement initializing');
 
 service.initialize();
-eventBus.on('tangled_event_log', e => console.log('[log]', e))
+//eventBus.on('tangled_event_log', e => console.log('[log]', e))
