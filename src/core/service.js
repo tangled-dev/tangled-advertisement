@@ -18,11 +18,14 @@ class Service {
         return database.initialize()
                        .then(() => configLoader.load())
                        .then(() => database.checkup())
-                       .then(() => network.initialize())
                        .then(() => peer.initialize())
+                       .then(() => network.initialize())
                        .then(() => api.initialize())
                        .catch(e => {
                            console.log(`[service] ${e && (e.message || e.api_message) || e}`);
+                           peer.stop();
+                           network.stop();
+                           api.stop();
                            this.initialized = false;
                            return new Promise(resolve => setTimeout(() => this.initialize(options).then(resolve), 5000));
                        });

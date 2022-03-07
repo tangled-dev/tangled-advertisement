@@ -13,7 +13,6 @@ import NatAPI from 'nat-api';
 import task from '../core/task';
 import cache from '../core/cache';
 import Utils from '../core/utils';
-import client from '../api/client';
 
 
 class Network {
@@ -441,7 +440,6 @@ class Network {
                                node_id        : nodeID,
                                node_signature : nodeSignature
                            }) => {
-                        client.loadCredentials(nodeID, nodeSignature);
                         this.nodePublicKey = base58.encode(publicKey.toBuffer());
                         this.nodeID        = Utils.getNodeIdFromPublicKey(this.nodePublicKey);
                         console.log('node id : ', this.nodeID);

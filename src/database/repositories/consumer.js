@@ -1,4 +1,5 @@
 import {Database} from '../database';
+import _ from 'lodash'
 
 export default class Consumer {
     constructor(database) {
@@ -238,7 +239,7 @@ export default class Consumer {
         return new Promise((resolve, reject) => {
             this.database.run(`DELETE
                                FROM advertisement_consumer.advertisement_queue
-                               WHERE create_date <= ? AND protocol_transaction_id IS NULL`, [timestamp], (err) => {
+                               WHERE create_date <= ? AND protocol_transaction_id IS NULL AND coalesce(count_impression,  0) > 0`, [timestamp], (err) => {
                 if (err) {
                     console.log('[database] error', err);
                     return reject(err);

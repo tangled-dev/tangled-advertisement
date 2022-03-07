@@ -7,6 +7,8 @@ import async from 'async';
 import mutex from '../core/mutex';
 import client from '../api/client';
 import cache from '../core/cache';
+import Utils from '../core/utils';
+import _ from 'lodash';
 
 
 export class Peer {
@@ -112,7 +114,7 @@ export class Peer {
                                 const payload = {
                                     type   : 'advertisement_sync',
                                     content: {
-                                        node_id           : network.nodeID,
+                                        node_id           : this.nodeID,
                                         node_ip_address   : network.nodePublicIp,
                                         node_port         : config.NODE_PORT,
                                         request_guid      : data.request_guid,
@@ -156,7 +158,7 @@ export class Peer {
                                 const payload = {
                                     type   : 'advertisement_new',
                                     content: {
-                                        node_id           : network.nodeID,
+                                        node_id           : this.nodeID,
                                         node_ip_address   : network.nodePublicIp,
                                         node_port         : config.NODE_PORT,
                                         request_guid      : data.request_guid,
@@ -228,7 +230,7 @@ export class Peer {
         const payload                           = {
             type   : 'advertisement_sync_request',
             content: {
-                node_id     : network.nodeID,
+                node_id     : this.nodeID,
                 request_guid: requestID
             }
         };
@@ -254,7 +256,7 @@ export class Peer {
         const payload                              = {
             type   : 'advertisement_request',
             content: {
-                node_id                        : network.nodeID,
+                node_id                        : this.nodeID,
                 node_ip_address                : network.nodePublicIp,
                 protocol_address_key_identifier: this.protocolAddressKeyIdentifier,
                 request_guid                   : requestID,
@@ -501,7 +503,7 @@ export class Peer {
 
     pruneAdvertisementQueue() {
         console.log('[peer] prune advertisement queue from consumer database');
-        let pruneOlderThanTimestamp = Math.floor(Date.now() / 1000 - config.ADS_PRUNE_AGE); // 2 days old
+        let pruneOlderThanTimestamp = Math.floor(Date.now() / 1000 - config.ADS_PRUNE_AGE); // 1 days old
         const consumerRepository    = database.getRepository('consumer');
         consumerRepository.pruneAdvertisementQueue(pruneOlderThanTimestamp);
 
@@ -510,8 +512,8 @@ export class Peer {
     }
 
     pruneAdvertisementRequestWithNoPaymentRequestQueue() {
-        console.log('[peer] prune advertisement request with no payment request in the last 60 seconds');
-        const pruneOlderThanTimestamp = Math.floor(Date.now() / 1000 - 600);
+        console.log('[peer] prune active advertisement request with no payment request in the last 24h');
+        const pruneOlderThanTimestamp = Math.floor(Date.now() / 1000 - 86400);
         const advertiserRepository    = database.getRepository('advertiser');
         return advertiserRepository.pruneAdvertisementRequestWithNoPaymentRequestQueue(pruneOlderThanTimestamp);
     }
@@ -536,15 +538,23 @@ export class Peer {
         task.scheduleTask('advertisement-payment-process', () => this.processAdvertisementPayment(), 60000);
         task.scheduleTask('advertisement-queue-prune', () => this.pruneAdvertisementQueue(), 60000);
         task.scheduleTask('advertisement-request-no-payment-request-prune', () => this.pruneAdvertisementRequestWithNoPaymentRequestQueue(), 60000);
-        return client.getWalletInformation()
-                     .then(data => {
-                         if (data.api_status === 'success') {
-                             this.protocolAddressKeyIdentifier = data.wallet.address_key_identifier;
-                         }
-                         else {
-                             return Promise.reject(data);
-                         }
-                     });
+        return Utils.loadNodeKeyAndCertificate()
+                    .then(({
+                               node_id        : nodeID,
+                               node_signature : nodeSignature
+                           }) => {
+                        this.nodeID = nodeID;
+                        client.loadCredentials(nodeID, nodeSignature);
+                        return client.getWalletInformation()
+                                     .then(data => {
+                                         if (data.api_status === 'success') {
+                                             this.protocolAddressKeyIdentifier = data.wallet.address_key_identifier;
+                                         }
+                                         else {
+                                             return Promise.reject(data);
+                                         }
+                                     });
+                    });
     }
 
     stop() {

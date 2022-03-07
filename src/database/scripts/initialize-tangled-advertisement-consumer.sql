@@ -28,6 +28,7 @@ CREATE TABLE advertisement_queue
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer'),
     UNIQUE (advertisement_guid, creative_request_guid)
 );
+CREATE INDEX idx_advertisement_queue_create_date_protocol_transaction_id_count_impression ON advertisement_queue ("create_date",  "protocol_transaction_id",  "count_impression");
 
 -- advertisement_attribute
 -- contains a reduced set of attribute types from the advertiser schema.

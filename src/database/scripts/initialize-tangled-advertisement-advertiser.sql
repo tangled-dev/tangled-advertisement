@@ -114,6 +114,7 @@ CREATE TABLE advertisement_request_log
 );
 CREATE INDEX idx_advertisement_request_log_advertisement_request ON advertisement_request_log ("advertisement_guid", "advertisement_request_guid");
 CREATE INDEX idx_advertisement_request_log_tangled_guid_consumer_status ON advertisement_request_log ("tangled_guid_consumer", "status");
+CREATE INDEX idx_advertisement_request_log_status_create_date ON advertisement_request_log ("status", "create_date");
 
 -- replace click log with umbrella table
 -- advertisement_engagement_log

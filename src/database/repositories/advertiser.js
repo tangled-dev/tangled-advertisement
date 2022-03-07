@@ -721,7 +721,7 @@ export default class Advertiser {
         return new Promise((resolve, reject) => {
             this.database.run(`DELETE
                                FROM advertisement_advertiser.advertisement_request_log AS r
-                               WHERE create_date <= ?
+                               WHERE status = 1 AND create_date <= ?
                                  AND NOT EXISTS(SELECT ledger_id
                                                 FROM advertisement_advertiser.advertisement_ledger
                                                 WHERE advertisement_request_guid =
