@@ -113,6 +113,7 @@ CREATE TABLE advertisement_request_log
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
 );
 CREATE INDEX idx_advertisement_request_log_advertisement_request ON advertisement_request_log ("advertisement_guid", "advertisement_request_guid");
+CREATE INDEX idx_advertisement_request_log_tangled_guid_consumer_status ON advertisement_request_log ("tangled_guid_consumer", "status");
 
 -- replace click log with umbrella table
 -- advertisement_engagement_log
@@ -172,6 +173,7 @@ CREATE TABLE advertisement_ledger_attribute
     status smallint NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
 );
+CREATE INDEX idx_advertisement_ledger_attribute_ledger_guid ON advertisement_ledger_attribute ("ledger_guid");
 
 -- protocol_transaction_id, protocol_output_position
 
