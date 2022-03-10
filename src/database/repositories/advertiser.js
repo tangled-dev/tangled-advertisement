@@ -210,9 +210,11 @@ export default class Advertiser {
                                FROM advertisement_advertiser.advertisement_request_log r
                                         INNER JOIN advertisement_advertiser.advertisement a
                                                    USING (advertisement_guid)
+                                        LEFT JOIN advertisement_ledger l ON l.advertisement_guid = r.advertisement_guid and l.advertisement_request_guid = r.advertisement_request_guid
                                WHERE r.tangled_guid_consumer = ?
                                  AND r.status = 1
-                                 AND a.status = 1`, [consumerGUID], (err, data) => {
+                                 AND a.status = 1
+                                 AND l.ledger_guid IS NULL`, [consumerGUID], (err, data) => {
                 if (err) {
                     return reject(err);
                 }
