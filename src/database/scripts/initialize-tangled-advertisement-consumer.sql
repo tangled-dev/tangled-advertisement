@@ -46,6 +46,7 @@ CREATE TABLE advertisement_attribute
     status smallint NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
 );
+CREATE INDEX idx_advertisement_attribute_create_date ON advertisement_attribute ("create_date");
 
 -- settlement_ledger
 -- the settlement ledger tracks payments received by the consumer from advertisements.  this can report consumer revenue by date.  it is not a ledger because it doesn't need to track balance or withdrawals.
@@ -69,6 +70,7 @@ CREATE TABLE settlement_ledger
     status smallint NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
 );
+CREATE INDEX idx_settlement_ledger_create_date ON settlement_ledger ("create_date");
 
 -- advertisement_block
 -- a block list is included with the consumer's advertisement requests from the network.
@@ -85,6 +87,7 @@ CREATE TABLE advertisement_block
     status smallint NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
 );
+CREATE INDEX idx_advertisement_block_create_date ON advertisement_block ("create_date");
 
 -- block_type
 -- (category block, advertiser block, domain block, offensive content, distracting content)

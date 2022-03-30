@@ -19,6 +19,7 @@ CREATE TABLE advertisement
     status smallint NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
 );
+CREATE INDEX idx_advertisement_create_date ON advertisement ("create_date");
 -- status smallint (0=inactive, 1=active, 2=pause_funding),
 
 CREATE TABLE advertisement_attribute
@@ -35,7 +36,7 @@ CREATE TABLE advertisement_attribute
 );
 -- object_guid char(32) (language, country, region, city, target phrase)
 CREATE INDEX attr_adv_type_obj_key ON advertisement_attribute (advertisement_attribute_guid, advertisement_guid, attribute_type_guid, object_guid, object_key);
-
+CREATE INDEX idx_advertisement_attribute_create_date ON advertisement_attribute ("create_date");
 
 -- advertisement_image_path, advertisement_image_url_prefix, advertisement_image_url, advertisement_headline, advertisement_deck
 -- target_language, target_country_include, target_country_exclude, target_region_include, target_region_exclude, target_city_include, target_city_exclude, target_phrase, target_phrase_link
@@ -84,7 +85,7 @@ CREATE TABLE advertisement_balance
     status smallint NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
 );
-
+CREATE INDEX idx_advertisement_balance_create_date ON advertisement_balance ("create_date");
 
 -- each time a consumer requests advertisements, a log entry is made.
 -- a advertisement_request_guid is provided with the request, and with the subsequent settlement request.
@@ -136,7 +137,7 @@ CREATE TABLE advertisement_click_log
     status smallint NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
 );
-
+CREATE INDEX idx_advertisement_click_log_create_date ON advertisement_click_log ("create_date");
 
 -- records deposits to the funding address, payments to consumers and transaction fees.
 -- used to calculate the minute, hourly and daily spend amount to manage daily budget limits.
@@ -161,6 +162,7 @@ CREATE TABLE advertisement_ledger
     UNIQUE(advertisement_guid, advertisement_request_guid, transaction_type_guid)
 );
 CREATE INDEX idx_advertisement_ledger_advertisement_request ON advertisement_ledger ("advertisement_guid", "advertisement_request_guid");
+CREATE INDEX idx_advertisement_ledger_create_date ON advertisement_ledger ("create_date");
 
 CREATE TABLE advertisement_ledger_attribute
 (
@@ -175,6 +177,7 @@ CREATE TABLE advertisement_ledger_attribute
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
 );
 CREATE INDEX idx_advertisement_ledger_attribute_ledger_guid ON advertisement_ledger_attribute ("ledger_guid");
+CREATE INDEX idx_advertisement_ledger_attribute_create_date ON advertisement_ledger_attribute ("create_date");
 
 -- protocol_transaction_id, protocol_output_position
 
@@ -256,6 +259,7 @@ CREATE TABLE advertisement_block_log
     status smallint NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
 );
+CREATE INDEX idx_advertisement_block_log_create_date ON advertisement_block_log ("create_date");
 
 
 -- block_type
