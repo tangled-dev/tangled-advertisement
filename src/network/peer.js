@@ -533,15 +533,16 @@ export class Peer {
             this.sendPeerList(ws);
             this.notifyNewPeer(ws);
         });
-        task.scheduleTask('peer-request-advertisement', () => this.requestAdvertisement(), 10000);
+        task.scheduleTask('peer-request-advertisement-once-on-boot', () => this.requestAdvertisement(), 15000, false, true);
+        task.scheduleTask('peer-request-advertisement', () => this.requestAdvertisement(), 60000);
         task.scheduleTask('peer-sync-advertisement', () => this.requestAdvertisementSync(), 600000);
         task.scheduleTask('advertisement-payment-process', () => this.processAdvertisementPayment(), 60000);
         task.scheduleTask('advertisement-queue-prune', () => this.pruneAdvertisementQueue(), 60000);
         task.scheduleTask('advertisement-request-no-payment-request-prune', () => this.pruneAdvertisementRequestWithNoPaymentRequestQueue(), 60000);
         return Utils.loadNodeKeyAndCertificate()
                     .then(({
-                               node_id        : nodeID,
-                               node_signature : nodeSignature
+                               node_id       : nodeID,
+                               node_signature: nodeSignature
                            }) => {
                         this.nodeID = nodeID;
                         client.loadCredentials(nodeID, nodeSignature);
@@ -564,6 +565,7 @@ export class Peer {
         eventBus.removeAllListeners('advertisement_payment_request');
         eventBus.removeAllListeners('advertisement_payment_response');
         eventBus.removeAllListeners('peer_connection');
+        task.removeTask('peer-request-advertisement-once-on-boot');
         task.removeTask('peer-request-advertisement');
         task.removeTask('peer-sync-advertisement');
         task.removeTask('advertisement-payment-process');
