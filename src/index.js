@@ -1,8 +1,6 @@
 import logger from './core/logger';
 import service from './core/service';
 import config from './config/config';
-import console from './core/console';
-import eventBus from './core/event-bus';
 
 const argv = require('yargs')
     .options({
