@@ -23,27 +23,27 @@ export const MILLIX_USD_VALUE            = 100000000 / 56; /*TODO: get this from
 
 export const NODE_INITIAL_LIST         = [
     {
-        host: '45.22.208.97',
+        host: '12.90.56.102',
         port: 25550
     },
     {
-        host: '45.22.208.97',
+        host: '12.90.56.102',
         port: 25551
     },
     {
-        host: '45.22.208.97',
+        host: '12.90.56.102',
         port: 25552
     },
     {
-        host: '45.22.208.97',
+        host: '12.90.56.102',
         port: 25553
     },
     {
-        host: '45.22.208.97',
+        host: '12.90.56.102',
         port: 25555
     },
     {
-        host: '45.22.208.97',
+        host: '12.90.56.102',
         port: 25556
     }
 ];
