@@ -16,6 +16,7 @@ export const NETWORK_SHORT_TIME_WAIT_MAX = 1500;
 export const TRANSACTION_ADDRESS_VERSION = MODE_TEST ? 'lal' : '0a0';
 export const TRANSACTION_OUTPUT_MAX      = 20;
 export const TRANSACTION_PROXY_FEE       = 1000;
+export const ADS_TRANSACTION_AMOUNT_MIN  = 1000;
 export const ADS_TRANSACTION_AMOUNT_MAX  = 999999999;
 export const ADS_PRUNE_AGE               = 86400; // 1 days old
 export const MILLIX_USD_VALUE            = 100000000 / 56; /*TODO: get this from an external api like fiatleak*/
@@ -103,6 +104,7 @@ export default {
     NETWORK_SHORT_TIME_WAIT_MAX,
     TRANSACTION_ADDRESS_VERSION,
     NETWORK_LONG_TIME_WAIT_MAX,
+    ADS_TRANSACTION_AMOUNT_MIN,
     TRANSACTION_OUTPUT_MAX,
     TRANSACTION_PROXY_FEE,
     DATABASE_CONNECTION,

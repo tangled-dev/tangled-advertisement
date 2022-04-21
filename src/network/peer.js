@@ -2,7 +2,7 @@ import eventBus from '../core/event-bus';
 import network from './network';
 import database, {Database} from '../database/database';
 import task from '../core/task';
-import config, {MODE_TEST} from '../config/config';
+import config from '../config/config';
 import async from 'async';
 import mutex from '../core/mutex';
 import client from '../api/client';
@@ -46,6 +46,9 @@ export class Peer {
         console.log(`[peer] new advertisements ${JSON.stringify(advertisements, null, 4)}`);
         const consumerRepository = database.getRepository('consumer');
         async.eachSeries(advertisements, (advertisement, callback) => {
+            if (advertisement.bid_impression_mlx < config.ADS_TRANSACTION_AMOUNT_MIN) {
+                return callback();
+            }
             consumerRepository.addAdvertisement(advertisement, nodeID, nodeIPAddress, nodePort, requestGUID)
                               .then(() => callback())
                               .catch(() => callback());
@@ -75,6 +78,9 @@ export class Peer {
         console.log(`[peer] new advertisements ${JSON.stringify(advertisements, null, 4)}`);
         const consumerRepository = database.getRepository('consumer');
         async.eachSeries(advertisements, (advertisement, callback) => {
+            if (advertisement.bid_impression_mlx < config.ADS_TRANSACTION_AMOUNT_MIN) {
+                return callback();
+            }
             consumerRepository.addAdvertisement(advertisement, nodeID, nodeIPAddress, nodePort, advertisement.advertisement_request_guid)
                               .then(() => callback())
                               .catch(() => callback());
