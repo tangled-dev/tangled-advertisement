@@ -94,7 +94,7 @@ export class Peer {
             from   : ws.node
         });
 
-        network.addNode(peer.node_prefix, peer.node_address, peer.node_port, peer.node_id);
+        network.addNode(peer.node_prefix, peer.node_address, peer.node_port, peer.node_id, true);
     }
 
     _onAdvertisementSyncRequest(data, ws) {
@@ -175,8 +175,30 @@ export class Peer {
                             });
     }
 
+    _onPeerConnection(ws) {
+        this.sendPeerList(ws);
+        this.notifyNewPeer(ws);
+    }
+
+    _onPeerDisconnection(ws) {
+        if (ws.connectionID && !network.getWebSocketByConnectionID(ws.connectionID)) {
+            cache.removeCacheItem('peer', `peer_list_${ws.connectionID}`);
+        }
+    }
+
     sendPeerList(ws) {
+        let cachedData = cache.getCacheItem('peer', `peer_list_${ws.connectionID}`);
+        if (!cachedData) {
+            cachedData = {};
+        }
+
         for (let peerWS of network.registeredClients) {
+            if (!peerWS.connectionID || !!cachedData[peerWS.connectionID]) {
+                continue;
+            }
+
+            cachedData[peerWS.connectionID] = Date.now();
+
             const payload = {
                 type   : 'new_peer',
                 content: {
@@ -197,25 +219,36 @@ export class Peer {
                 return;
             }
         }
+
+        cache.setCacheItem('peer', `peer_list_${ws.connectionID}`, cachedData, Number.MAX_SAFE_INTEGER);
     }
 
-    notifyNewPeer(ws) {
+    notifyNewPeer(peerWS) {
         const payload = {
             type   : 'new_peer',
             content: {
-                node_id     : ws.nodeID,
-                node_prefix : ws.nodePrefix,
-                node_address: ws.nodeIPAddress,
-                node_port   : ws.nodePort
+                node_id     : peerWS.nodeID,
+                node_prefix : peerWS.nodePrefix,
+                node_address: peerWS.nodeIPAddress,
+                node_port   : peerWS.nodePort
             }
         };
         const data    = JSON.stringify(payload);
         network.registeredClients.forEach(ws => {
-            const key = `peer_notify_${ws.nodeID}_${payload.content.node_id}`;
-            if (cache.getCacheItem('peer', key)) {
+            if (!ws.connectionID) {
                 return;
             }
-            cache.setCacheItem('peer', key, true, Number.MAX_SAFE_INTEGER);
+            const cachedData = cache.getCacheItem('peer', `peer_list_${ws.connectionID}`);
+            if (!cachedData) {
+                return;
+            }
+
+            if (!!cachedData[peerWS.connectionID] && cachedData[peerWS.connectionID] > Date.now() - 600000) {
+                return;
+            }
+
+            cachedData[peerWS.connectionID] = Date.now();
+
             try {
                 ws.send(data);
             }
@@ -535,10 +568,11 @@ export class Peer {
         eventBus.on('advertisement_sync', this._onSyncAdvertisement.bind(this));
 
         //out
-        eventBus.on('peer_connection', (ws) => {
-            this.sendPeerList(ws);
-            this.notifyNewPeer(ws);
-        });
+        eventBus.on('peer_connection', this._onPeerConnection.bind(this));
+
+        //other
+        eventBus.on('peer_connection_closed', this._onPeerDisconnection.bind(this));
+
         task.scheduleTask('peer-request-advertisement-once-on-boot', () => this.requestAdvertisement(), 15000, false, true);
         task.scheduleTask('peer-request-advertisement', () => this.requestAdvertisement(), 60000);
         task.scheduleTask('peer-sync-advertisement', () => this.requestAdvertisementSync(), 600000);
@@ -571,6 +605,8 @@ export class Peer {
         eventBus.removeAllListeners('advertisement_payment_request');
         eventBus.removeAllListeners('advertisement_payment_response');
         eventBus.removeAllListeners('peer_connection');
+        eventBus.removeAllListeners('peer_connection_closed');
+
         task.removeTask('peer-request-advertisement-once-on-boot');
         task.removeTask('peer-request-advertisement');
         task.removeTask('peer-sync-advertisement');

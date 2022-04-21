@@ -17,6 +17,7 @@ import Utils from '../core/utils';
 
 class Network {
     constructor() {
+        this._nodeListOnline     = {};
         this._nodeList           = {};
         this._connectionRegistry = {};
         this._nodeRegistry       = {};
@@ -51,8 +52,13 @@ class Network {
         return this._wss;
     }
 
-    addNode(prefix, ip, port, id) {
-        let url = prefix + ip + ':' + port;
+    addNode(prefix, ip, port, id, isOnline = false) {
+        const url = `${prefix}${ip}:${port}`;
+
+        if (isOnline) {
+            this._nodeListOnline[url] = Date.now();
+        }
+
         if (!this._nodeList[url]) {
             const now           = Math.floor(Date.now() / 1000);
             this._nodeList[url] = {
@@ -79,9 +85,11 @@ class Network {
             return Promise.reject();
         }
 
-        const url = prefix + ipAddress + ':' + port;
+        const url      = prefix + ipAddress + ':' + port;
+        const cacheKey = `network_error_${url}`;
 
-        if (cache.getCacheItem('network', `network_error_${url}`)) {
+        const errorCount = cache.getCacheItem('network', cacheKey);
+        if (!!errorCount && errorCount >= 10) {
             return Promise.reject();
         }
 
@@ -103,6 +111,7 @@ class Network {
 
             ws.once('open', () => {
                 console.log('[network outgoing] Open connection to ' + url);
+                cache.removeCacheItem('network', cacheKey);
 
                 ws.node            = url;
                 ws.nodePort        = port;
@@ -135,7 +144,15 @@ class Network {
                 // distinguish connection errors from later errors that occur
                 // on open connection
                 if (!ws.outBound) {
-                    cache.setCacheItem('network', `network_error_${url}`, true, 600000); //wait 10 min
+                    let errorCount = cache.getCacheItem('network', cacheKey);
+                    if (!errorCount) {
+                        errorCount = 1;
+                    }
+                    else {
+                        errorCount++;
+                    }
+
+                    cache.setCacheItem('network', cacheKey, errorCount, 600000); //wait 10 min
                     return reject('there was an error in the connection,' + e);
                 }
 
@@ -250,6 +267,28 @@ class Network {
                 });
     }
 
+    retryConnectToOnlineNodes() {
+        return new Promise(resolve => {
+            const onlineNodeList = _.keys(this._nodeListOnline);
+            console.log('[network-stats] number of nodes online is', onlineNodeList.length,'. active number of connections is', _.keys(this._connectionRegistry).length);
+            async.eachLimit(_.shuffle(onlineNodeList), 4, (nodeURL, callback) => {
+                const node = this._nodeList[nodeURL];
+
+                if (this._nodeListOnline[nodeURL] < Date.now() - 600000) {
+                    delete this._nodeListOnline[nodeURL];
+                    return callback();
+                }
+                else if (this._nodeRegistry[node.node_id]) {
+                    return callback();
+                }
+
+                this._connectTo(node.node_prefix, node.node_address, node.node_port, node.node_port_api, node.node_id)
+                    .then(() => setTimeout(callback, 1000))
+                    .catch(() => setTimeout(callback, 1000));
+            }, () => resolve());
+        });
+    }
+
 
     retryConnectToInactiveNodes() {
         if (!this.initialized) {
@@ -306,8 +345,8 @@ class Network {
             return;
         }
 
-        if (this._registerWebsocketToNodeID(ws)) {
-            this._registerWebsocketConnection(ws);
+        this._registerWebsocketToNodeID(ws);
+        if (this._registerWebsocketConnection(ws)) {
             if (ws.outBound) {
                 const now               = Math.floor(Date.now() / 1000);
                 this._nodeList[ws.node] = {
@@ -368,10 +407,9 @@ class Network {
         }
 
         console.log('[network] node ' + ws.node + ' registered with node id ' + nodeID);
-        return true;
     }
 
-    getWebSocketByID(connectionID) {
+    getWebSocketByConnectionID(connectionID) {
         if (this._connectionRegistry[connectionID]) {
             return this._connectionRegistry[connectionID][0];
         }
@@ -383,12 +421,13 @@ class Network {
         if (this._connectionRegistry[connectionID]) {
             this._connectionRegistry[connectionID].push(ws);
             console.log('[network] node ' + ws.node + ' already registered with connection id ' + connectionID);
-            cache.setCacheItem('network', `network_error_${ws.node}`, true, 600000); //wait 10 min
-            return ws.close(1000, 'new_connection_rejected');
+            ws.close(1000, 'new_connection_rejected');
+            return false;
         }
         else {
             console.log('[network] node ' + ws.node + ' registered with connection id ' + connectionID);
             this._connectionRegistry[connectionID] = [ws];
+            return true;
         }
     }
 
@@ -483,6 +522,7 @@ class Network {
             return this._initializeServer().then(() => {
                 eventBus.emit('network_ready');
                 task.scheduleTask('network-reconnect', () => this.retryConnectToInactiveNodes(), 10000);
+                task.scheduleTask('retry_connect_online_node', this.retryConnectToOnlineNodes.bind(this), 10000, true);
             }).catch(e => console.log('[network] err', e));
         }).catch(() => {
             setTimeout(() => this.initialize(), 1000);
