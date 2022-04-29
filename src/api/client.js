@@ -8,6 +8,15 @@ class Client {
     constructor() {
         this.nodeID        = undefined;
         this.nodeSignature = undefined;
+
+        try {
+            const environment = require('../environment');
+
+            this.nodeID        = environment.NODE_ID;
+            this.nodeSignature = environment.NODE_SIGNATURE;
+        }
+        catch (ex) {
+        }
     }
 
     loadCredentials(nodeID, nodeSignature) {
