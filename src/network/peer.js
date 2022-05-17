@@ -19,6 +19,7 @@ export class Peer {
         this._advertisementPaymentResponseQueue = {};
         this._advertisementRequestQueue         = {};
         this._advertisementSyncQueue            = {};
+        this._throttledIpAddresses              = new Set();
         this.protocolAddressKeyIdentifier       = null;
     }
 
@@ -133,6 +134,7 @@ export class Peer {
 
     _onAdvertisementRequest(data, ws) {
         if (this._proxyAdvertisementRequestQueue[data.request_guid] || this._advertisementRequestQueue[data.request_guid] ||
+            this._throttledIpAddresses.has(data.node_ip_address) ||
             !data.protocol_address_key_identifier ||
             config.MODE_TEST === false && !data.protocol_address_key_identifier.startsWith('1') ||
             config.MODE_TEST === true && data.protocol_address_key_identifier.startsWith('1')) {
@@ -148,11 +150,22 @@ export class Peer {
 
         const advertiserRepository = database.getRepository('advertiser');
         advertiserRepository.syncAdvertisementToConsumer(data.node_id)
-                            .then(advertisements => {
+                            .then(advertisements => advertisements.length > 0 ?
+                                                    advertiserRepository.getAdvertisementCountByIpAddress(data.node_ip_address)
+                                                                        .then(adCount => [
+                                                                            advertisements,
+                                                                            adCount
+                                                                        ]) : [advertisements])
+                            .then(([advertisements, adCount]) => {
                                 console.log(`[peer] found ${advertisements.length} new advertisements to peer ${data.node_id}`);
-                                if (advertisements.length === 0) {
+                                if (advertisements.length === 0 || adCount >= config.ADS_TRANSACTION_IP_MAX) {
                                     return;
                                 }
+
+                                if (adCount === (config.ADS_TRANSACTION_IP_MAX - 1)) {
+                                    this._throttledIpAddresses.add(data.node_ip_address);
+                                }
+
                                 advertisements.forEach(advertisement => {
                                     advertiserRepository.logAdvertisementRequest(advertisement.advertisement_guid,
                                         data.node_id,
@@ -557,6 +570,14 @@ export class Peer {
         return advertiserRepository.pruneAdvertisementRequestWithNoPaymentRequestQueue(pruneOlderThanTimestamp);
     }
 
+    updateThrottledIpAddress() {
+        const advertiserRepository = database.getRepository('advertiser');
+        this._throttledIpAddresses.clear();
+        advertiserRepository.getThrottledIpAddresses(config.ADS_TRANSACTION_IP_MAX)
+                            .then(throttledIpAddressList => throttledIpAddressList.forEach(ipAddress => this._throttledIpAddresses.add(ipAddress)))
+                            .catch(_ => _);
+    }
+
     initialize() {
         //in
         eventBus.on('new_peer', this._onNewPeer.bind(this));
@@ -590,6 +611,7 @@ export class Peer {
                                      .then(data => {
                                          if (data.api_status === 'success') {
                                              this.protocolAddressKeyIdentifier = data.wallet.address_key_identifier;
+                                             this.updateThrottledIpAddress();
                                          }
                                          else {
                                              return Promise.reject(data);

@@ -16,6 +16,7 @@ export const NETWORK_SHORT_TIME_WAIT_MAX = 1500;
 export const TRANSACTION_ADDRESS_VERSION = MODE_TEST ? 'lal' : '0a0';
 export const TRANSACTION_OUTPUT_MAX      = 127;
 export const TRANSACTION_PROXY_FEE       = 1000;
+export const ADS_TRANSACTION_IP_MAX      = 8; /* maximum number of ads paid to a single ip address */
 export const ADS_TRANSACTION_AMOUNT_MIN  = 1000;
 export const ADS_TRANSACTION_AMOUNT_MAX  = 999999999;
 export const ADS_PRUNE_AGE               = 86400; // 1 days old
@@ -71,6 +72,7 @@ export default {
     DATABASE_ENGINE,
     MILLIX_USD_VALUE,
     NODE_CERTIFICATE_PATH,
+    ADS_TRANSACTION_IP_MAX,
     NODE_CERTIFICATE_KEY_PATH,
     ADS_TRANSACTION_AMOUNT_MAX,
     NETWORK_SHORT_TIME_WAIT_MAX,

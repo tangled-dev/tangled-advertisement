@@ -1,7 +1,7 @@
 import {Database} from '../database';
 import config from '../../config/config';
 import objectHash from '../../core/crypto/object-hash';
-import _ from 'lodash'
+import _ from 'lodash';
 
 export default class Advertiser {
     constructor(database) {
@@ -148,12 +148,11 @@ export default class Advertiser {
         return new Promise((resolve, reject) => {
             this.database.all(`SELECT *
                                FROM advertisement_advertiser.advertisement
-                               WHERE advertisement_guid NOT IN (
-                                   SELECT advertisement_guid
-                                   FROM advertisement_advertiser.advertisement_request_log
-                                   WHERE tangled_guid_consumer = ?
-                                     AND status = 1
-                               )
+                               WHERE advertisement_guid NOT IN
+                                     (SELECT advertisement_guid
+                                      FROM advertisement_advertiser.advertisement_request_log
+                                      WHERE tangled_guid_consumer = ?
+                                        AND status = 1)
                                  AND status = 1`, [consumerGUID], (err, data) => {
                 if (err) {
                     return reject(err);
@@ -210,7 +209,11 @@ export default class Advertiser {
                                FROM advertisement_advertiser.advertisement_request_log r
                                         INNER JOIN advertisement_advertiser.advertisement a
                                                    USING (advertisement_guid)
-                                        LEFT JOIN advertisement_ledger l ON l.advertisement_guid = r.advertisement_guid and l.advertisement_request_guid = r.advertisement_request_guid
+                                        LEFT JOIN advertisement_ledger l
+                                                  ON l.advertisement_guid =
+                                                     r.advertisement_guid and
+                                                     l.advertisement_request_guid =
+                                                     r.advertisement_request_guid
                                WHERE r.tangled_guid_consumer = ?
                                  AND r.status = 1
                                  AND a.status = 1
@@ -723,7 +726,8 @@ export default class Advertiser {
         return new Promise((resolve, reject) => {
             this.database.run(`DELETE
                                FROM advertisement_advertiser.advertisement_request_log AS r
-                               WHERE status = 1 AND create_date <= ?
+                               WHERE status = 1
+                                 AND create_date <= ?
                                  AND NOT EXISTS(SELECT ledger_id
                                                 FROM advertisement_advertiser.advertisement_ledger
                                                 WHERE advertisement_request_guid =
@@ -753,6 +757,45 @@ export default class Advertiser {
 
                 resolve();
             });
+        });
+    }
+
+    getThrottledIpAddresses(maxAdvertisementByIpAddress) {
+        return new Promise((resolve, reject) => {
+            this.database.all(`select distinct ip_address_consumer
+                               from advertisement_request_log
+                               where status = 1
+                               group by advertisement_guid, ip_address_consumer
+                               having count(1) >= ?`,
+                [maxAdvertisementByIpAddress],
+                (err, data) => {
+                    if (err) {
+                        console.log('[database] error', err);
+                        return reject(err);
+                    }
+
+                    resolve(data);
+                });
+        });
+    }
+
+    getAdvertisementCountByIpAddress(ipAddress) {
+        return new Promise((resolve, reject) => {
+            this.database.get(`select max(ad_count) as ad_count
+                               from (select count(1) as ad_count
+                                     from advertisement_request_log
+                                     where status = 1
+                                       and ip_address_consumer = ?
+                                     group by advertisement_guid)`,
+                [ipAddress],
+                (err, data) => {
+                    if (err) {
+                        console.log('[database] error', err);
+                        return reject(err);
+                    }
+
+                    resolve(data.ad_count);
+                });
         });
     }
 }

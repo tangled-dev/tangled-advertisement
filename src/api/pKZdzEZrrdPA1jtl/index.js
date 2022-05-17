@@ -1,6 +1,7 @@
 import Endpoint from '../endpoint';
 import database from '../../database/database';
 import config from '../../config/config';
+import peer from '../../network/peer';
 
 
 /**
@@ -30,16 +31,19 @@ class _pKZdzEZrrdPA1jtl extends Endpoint {
             });
         }
 
-        const timestamp            = Math.floor(Date.now() / 1000 - 86400); // 1 day old
+        const timestamp = Math.floor(Date.now() / 1000 - 86400); /* 1 day old */
         const advertiserRepository = database.getRepository('advertiser');
         advertiserRepository.resetAd({
             advertisement_guid: advertisementGUID,
-            create_date_max: timestamp
+            create_date_max   : timestamp
         })
-                            .then(() => res.send({
-                                api_status : 'success',
-                                api_message: 'ad reset performed'
-                            }))
+                            .then(() => {
+                                peer.updateThrottledIpAddress();
+                                res.send({
+                                    api_status : 'success',
+                                    api_message: 'ad reset performed'
+                                });
+                            })
                             .catch(e => res.send({
                                 api_status : 'fail',
                                 api_message: `unexpected generic api error: (${e})`
