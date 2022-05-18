@@ -9,6 +9,7 @@ import client from '../api/client';
 import cache from '../core/cache';
 import Utils from '../core/utils';
 import _ from 'lodash';
+import {machineId} from 'node-machine-id';
 
 
 export class Peer {
@@ -149,7 +150,7 @@ export class Peer {
         this.propagateRequest('advertisement_request', data, ws);
 
         const advertiserRepository = database.getRepository('advertiser');
-        advertiserRepository.syncAdvertisementToConsumer(data.node_id)
+        advertiserRepository.syncAdvertisementToConsumer(data.node_id, data.device_id)
                             .then(advertisements => advertisements.length > 0 ?
                                                     advertiserRepository.getAdvertisementCountByIpAddress(data.node_ip_address)
                                                                         .then(adCount => [
@@ -168,6 +169,7 @@ export class Peer {
 
                                 advertisements.forEach(advertisement => {
                                     advertiserRepository.logAdvertisementRequest(advertisement.advertisement_guid,
+                                        data.device_id,
                                         data.node_id,
                                         data.node_ip_address,
                                         data.request_guid,
@@ -311,6 +313,7 @@ export class Peer {
                 node_id                        : this.nodeID,
                 node_ip_address                : network.nodePublicIp,
                 protocol_address_key_identifier: this.protocolAddressKeyIdentifier,
+                device_id                      : this.deviceID,
                 request_guid                   : requestID,
                 advertisement                  : {
                     type: 'all'
@@ -481,7 +484,8 @@ export class Peer {
                                             console.log(`[peer] processing payment for `, pendingPayment);
                                             advertiserRepository.getAdvertisementRequestLog({
                                                 advertisement_guid        : pendingPayment.advertisement_guid,
-                                                advertisement_request_guid: pendingPayment.advertisement_request_guid
+                                                advertisement_request_guid: pendingPayment.advertisement_request_guid,
+                                                status                    : 1
                                             })
                                                                 .then(requestLog => {
                                                                     if (config.MODE_TEST === false && requestLog.protocol_address_key_identifier && requestLog.protocol_address_key_identifier.startsWith('1')) {
@@ -572,9 +576,11 @@ export class Peer {
 
     updateThrottledIpAddress() {
         const advertiserRepository = database.getRepository('advertiser');
-        this._throttledIpAddresses.clear();
         advertiserRepository.getThrottledIpAddresses(config.ADS_TRANSACTION_IP_MAX)
-                            .then(throttledIpAddressList => throttledIpAddressList.forEach(ipAddress => this._throttledIpAddresses.add(ipAddress)))
+                            .then(throttledIpAddressList => {
+                                this._throttledIpAddresses.clear();
+                                throttledIpAddressList.forEach(ipAddress => this._throttledIpAddresses.add(ipAddress));
+                            })
                             .catch(_ => _);
     }
 
@@ -599,7 +605,8 @@ export class Peer {
         task.scheduleTask('peer-sync-advertisement', () => this.requestAdvertisementSync(), 600000);
         task.scheduleTask('advertisement-payment-process', () => this.processAdvertisementPayment(), 60000);
         task.scheduleTask('advertisement-queue-prune', () => this.pruneAdvertisementQueue(), 60000);
-        task.scheduleTask('advertisement-request-no-payment-request-prune', () => this.pruneAdvertisementRequestWithNoPaymentRequestQueue(), 60000);
+        task.scheduleTask('peer-request-advertisement', () => this.requestAdvertisement(), 60000);
+        task.scheduleTask('node-update-throttled-ip-address', () => this.updateThrottledIpAddress(), 60000);
         return Utils.loadNodeKeyAndCertificate()
                     .then(({
                                node_id       : nodeID,
@@ -611,7 +618,11 @@ export class Peer {
                                      .then(data => {
                                          if (data.api_status === 'success') {
                                              this.protocolAddressKeyIdentifier = data.wallet.address_key_identifier;
-                                             this.updateThrottledIpAddress();
+                                             return machineId().then(deviceID => {
+                                                 this.deviceID = deviceID;
+                                                 this.updateThrottledIpAddress();
+                                             });
+
                                          }
                                          else {
                                              return Promise.reject(data);
@@ -635,6 +646,7 @@ export class Peer {
         task.removeTask('advertisement-payment-process');
         task.removeTask('advertisement-queue-prune');
         task.removeTask('advertisement-request-no-payment-request-prune');
+        task.removeTask('node-update-throttled-ip-address');
     }
 }
 

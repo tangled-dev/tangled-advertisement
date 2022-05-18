@@ -144,7 +144,7 @@ export default class Advertiser {
         return this.getCategory({advertisement_category_guid: categoryGuid});
     }
 
-    syncAdvertisementToConsumer(consumerGUID) {
+    syncAdvertisementToConsumer(consumerGUID, deviceGUID) {
         return new Promise((resolve, reject) => {
             this.database.all(`SELECT *
                                FROM advertisement_advertiser.advertisement
@@ -153,7 +153,15 @@ export default class Advertiser {
                                       FROM advertisement_advertiser.advertisement_request_log
                                       WHERE tangled_guid_consumer = ?
                                         AND status = 1)
-                                 AND status = 1`, [consumerGUID], (err, data) => {
+                                 AND advertisement_guid NOT IN
+                                     (SELECT advertisement_guid
+                                      FROM advertisement_advertiser.advertisement_request_log
+                                      WHERE tangled_guid_device = ?
+                                        AND status = 1)
+                                 AND status = 1`, [
+                consumerGUID,
+                deviceGUID
+            ], (err, data) => {
                 if (err) {
                     return reject(err);
                 }
@@ -268,21 +276,23 @@ export default class Advertiser {
         });
     }
 
-    logAdvertisementRequest(guid, consumerGUID, ipAddress, requestGUID, protocolAddressKeyIdentifier, rawRequest) {
+    logAdvertisementRequest(guid, deviceGUID, consumerGUID, ipAddress, requestGUID, protocolAddressKeyIdentifier, rawRequest) {
         return new Promise((resolve, reject) => {
             this.database.run(`INSERT INTO advertisement_advertiser.advertisement_request_log
                                (log_guid,
                                 advertisement_guid,
                                 advertisement_request_guid,
                                 tangled_guid_consumer,
+                                tangled_guid_device,
                                 ip_address_consumer,
                                 protocol_address_key_identifier,
                                 advertisement_request_raw)
-                               VALUES (?, ?, ?, ?, ?, ?, ?);`, [
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?);`, [
                 Database.generateID(32),
                 guid,
                 requestGUID,
                 consumerGUID,
+                deviceGUID,
                 ipAddress,
                 protocolAddressKeyIdentifier,
                 rawRequest
@@ -457,7 +467,7 @@ export default class Advertiser {
             const {
                       sql,
                       parameters
-                  } = Database.buildQuery('SELECT * FROM advertisement_ledger l JOIN advertisement_request_log r USING (advertisement_guid, advertisement_request_guid) WHERE l.tx_address_deposit_vout_md5 is NULL', undefined, undefined, limit);
+                  } = Database.buildQuery('SELECT * FROM advertisement_ledger l JOIN advertisement_request_log r USING (advertisement_guid, advertisement_request_guid) WHERE l.tx_address_deposit_vout_md5 is NULL AND r.status = 1', undefined, undefined, limit);
             this.database.all(sql, parameters, (err, data) => {
                 if (err) {
                     return reject(err);
