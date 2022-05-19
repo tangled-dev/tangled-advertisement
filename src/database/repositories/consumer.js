@@ -1,5 +1,5 @@
 import {Database} from '../database';
-import _ from 'lodash'
+import _ from 'lodash';
 
 export default class Consumer {
     constructor(database) {
@@ -69,38 +69,28 @@ export default class Consumer {
                 if (err) {
                     return reject(err);
                 }
+                return resolve(data);
+            });
+        });
+    }
 
-                if (data.length === 0) {
-                    return resolve(data);
+    getAdvertisementWithSettlementLedgerList(where = '') {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery(`SELECT *, 
+            advertisement_consumer.advertisement_queue.advertisement_guid as advertisement_guid,
+            advertisement_consumer.settlement_ledger.create_date as payment_date, 
+            advertisement_consumer.advertisement_queue.create_date as presentation_date  
+            FROM advertisement_consumer.settlement_ledger 
+            JOIN advertisement_consumer.advertisement_queue ON advertisement_consumer.settlement_ledger.ledger_guid = advertisement_consumer.advertisement_queue.ledger_guid`, where);
+
+            this.database.all(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
                 }
-                const advertisements = {};
-                data.forEach(advertisement => {
-                    advertisements[advertisement.advertisement_guid] = {
-                        ...advertisement,
-                        attributes: []
-                    };
-                });
-
-                const advertisementGUIDs = _.keys(advertisements);
-                this.database.all(`SELECT *
-                                   FROM advertisement_consumer.advertisement_attribute
-                                   WHERE advertisement_guid IN (${advertisementGUIDs.map(() => '?').join(',')})`, advertisementGUIDs, (err, data) => {
-                    if (err) {
-                        return reject(err);
-                    }
-
-                    data.forEach(attribute => {
-                        advertisements[attribute.advertisement_guid].attributes.push({
-                            attribute_guid: attribute.advertisement_attribute_guid,
-                            attribute_type: this.normalizationRepository.getType(attribute.attribute_type_guid),
-                            object        : this.normalizationRepository.getType(attribute.object_guid),
-                            value         : attribute.value
-                        });
-                    });
-
-                    resolve(_.values(advertisements));
-                });
-
+                resolve(data);
             });
         });
     }

@@ -28,8 +28,8 @@ class _ae60ccb743cd3c79 extends Endpoint {
         advertiserRepository.getAdvertisementById({advertisement_guid: advertisementGUID})
                             .then(advertisement => {
                                 if (advertisement) {
-                                    let attributesRepository = database.getRepository('advertiser_attributes');
-                                    attributesRepository.get({advertisement_guid: advertisementGUID}).then(attributes => {
+                                    let advertiserAttributeRepository = database.getRepository('advertiser_attribute');
+                                    advertiserAttributeRepository.get({advertisement_guid: advertisementGUID}).then(attributes => {
                                         for (const attribute of attributes) {
                                             advertisement[attribute.attribute_type] = {
                                                 value: attribute.value,

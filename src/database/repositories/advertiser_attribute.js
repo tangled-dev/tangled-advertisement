@@ -1,6 +1,6 @@
 import {Database} from '../database';
 
-export default class AdvertiserAttributes {
+export default class AdvertiserAttribute {
     constructor(database,normalizationRepository) {
         this.database = database;
         this.normalizationRepository = normalizationRepository;
