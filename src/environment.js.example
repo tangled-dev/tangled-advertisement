@@ -1,0 +1,9 @@
+export const NODE_ID        = '';
+export const NODE_SIGNATURE = '';
+
+const environment = {
+    NODE_ID,
+    NODE_SIGNATURE
+};
+
+export default environment;

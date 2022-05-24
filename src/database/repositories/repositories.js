@@ -8,8 +8,10 @@ import Consumer from './consumer';
 import Keychain from './keychain';
 import Wallet from './wallet';
 import Config from './config';
+import AdvertiserAttribute from './advertiser-attribute';
+import ConsumerAttribute from './consumer-attribute';
 
 export {
     Advertiser, Consumer, Node, Schema, API, Normalization, Language, Wallet, Keychain,
-    Config
+    Config, AdvertiserAttribute, ConsumerAttribute
 };

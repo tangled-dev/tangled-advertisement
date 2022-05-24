@@ -1,7 +1,7 @@
 import config from '../config/config';
 import {
     Advertiser, API, Consumer, Keychain, Language, Node, Normalization, Schema,
-    Wallet, Config
+    Wallet, Config, AdvertiserAttribute, ConsumerAttribute
 } from './repositories/repositories';
 import mutex from '../core/mutex';
 import eventBus from '../core/event-bus';
@@ -79,7 +79,7 @@ export class Database {
         if (where) {
             _.each(_.keys(where), (key, idx) => {
                 if (where[key] === undefined ||
-                    ((key.endsWith('_begin') || key.endsWith('_min') || key.endsWith('_end') || key.endsWith('_max')) && !where[key])) {
+                    ((key.endsWith('_begin') || key.endsWith('_min') || key.endsWith('_end') || key.endsWith('_max') || key.endsWith('_in')) && !where[key])) {
                     return;
                 }
 
@@ -98,6 +98,13 @@ export class Database {
                 }
                 else if (where[key] === null) {
                     sql += `${key} is NULL`;
+                    return;
+                }
+                else if (key.endsWith('_in')) {
+                    sql += `${key.substring(0, key.lastIndexOf('_'))} IN (${where[key].map(() => '?').join(',')})`;
+                    for (let parameter of where[key]) {
+                        parameters.push(parameter);
+                    }
                     return;
                 }
                 else {
@@ -387,6 +394,12 @@ export class Database {
         this.repositories['keychain']      = new Keychain(this.database);
         this.repositories['wallet']        = new Wallet(this.database);
         this.repositories['config']        = new Config(this.database);
+
+        this.repositories['consumer_attribute'] = new ConsumerAttribute(this.database);
+        this.repositories['consumer_attribute'].setNormalizationRepository(this.repositories['normalization']);
+
+        this.repositories['advertiser_attribute'] = new AdvertiserAttribute(this.database);
+        this.repositories['advertiser_attribute'].setNormalizationRepository(this.repositories['normalization']);
 
         this.repositories['node'] = new Node(this.database);
         this.repositories['node'].setNormalizationRepository(this.repositories['normalization']);
