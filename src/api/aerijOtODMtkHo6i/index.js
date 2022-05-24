@@ -32,8 +32,7 @@ class _aerijOtODMtkHo6i extends Endpoint {
             const advertiserRepository = database.getRepository('advertiser');
             const fundingAddress       = `${peer.protocolAddressKeyIdentifier}0a0${peer.protocolAddressKeyIdentifier}`;
             return advertiserRepository.getAdvertisementByProtocolAddressFunding(fundingAddress).then(advertisement => res.send({
-                    api_status        : 'ok',
-                    api_message       : 'fetch successfull',
+                    api_status        : 'success',
                     advertisement_list: advertisement
                 }
             ));

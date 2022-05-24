@@ -46,6 +46,15 @@
       "enable": true
     },
     {
+      "id": "ae60ccb743cd3c79",
+      "name": "get_advertisement_by_id",
+      "description": "returns ad by id",
+      "method": "GET",
+      "version_released": "1.0.0",
+      "permission": "{\"require_identity\": false, \"private\": false}",
+      "enable": true
+    },
+    {
       "id": "wDqnBLvXY6FGUSfc",
       "name": "get_languages_list",
       "description": "returns list of available languages",
@@ -56,8 +65,8 @@
     },
     {
       "id": "scWZ0yhuk5hHLd8s",
-      "name": "create_ad",
-      "description": "create ad with given params",
+      "name": "upsert_ad",
+      "description": "create or update ad",
       "method": "GET",
       "version_released": "1.0.0",
       "permission": "{\"require_identity\": false, \"private\": false}",
@@ -67,6 +76,15 @@
       "id": "aerijOtODMtkHo6i",
       "name": "list_ad",
       "description": "list user ads",
+      "method": "GET",
+      "version_released": "1.0.0",
+      "permission": "{\"require_identity\": false, \"private\": false}",
+      "enable": true
+    },    
+    {
+      "id": "B1Gg7nMljx0yX9z9",
+      "name": "get_advertisement_consumer_settlement_ledger_list",
+      "description": "advertisement consumer settlement ledger list",
       "method": "GET",
       "version_released": "1.0.0",
       "permission": "{\"require_identity\": false, \"private\": false}",

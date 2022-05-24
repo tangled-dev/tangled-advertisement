@@ -37,7 +37,7 @@ class _C7neErVANMWXWuse extends Endpoint {
                                    .then(() => {
                                            advertiserRepository.getAdvertisement({advertisement_guid: payload.advertisement_guid})
                                                                .then(advertisement => res.send({
-                                                                   api_status   : 'ok',
+                                                                   api_status   : 'success',
                                                                    advertisement: advertisement
                                                                }))
                                                                .catch(e => res.send({
