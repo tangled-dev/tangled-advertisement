@@ -100,12 +100,12 @@ export class Database {
                     sql += `${key} is NULL`;
                     return;
                 }
-                else if (key.endsWith('_in') || key.endsWith('_in')) {
-                    sql += `${key.substring(0, key.lastIndexOf('_'))} in (?)`;
-
-                    if (Array.isArray(where[key])) {
-                        where[key] = where[key].join(',');
+                else if (key.endsWith('_in')) {
+                    sql += `${key.substring(0, key.lastIndexOf('_'))} IN (${where[key].map(() => '?').join(',')})`;
+                    for (let parameter of where[key]) {
+                        parameters.push(parameter);
                     }
+                    return;
                 }
                 else {
                     sql += `${key}= ?`;
