@@ -60,11 +60,11 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
             });
         }
 
-        const bid_impression_mlx = Math.floor(payload.bid_impression_mlx);
-        if (bid_impression_mlx > config.ADS_TRANSACTION_AMOUNT_MAX) {
+        const bidImpressionMlx = Math.floor(payload.bid_impression_mlx);
+        if (bidImpressionMlx > config.ADS_TRANSACTION_AMOUNT_MAX) {
             return res.status(400).send({
                 api_status : 'fail',
-                api_message: `bid_impression_mlx (${payload.bid_impression_mlx}) is greater than the maximum allowed value: max bid per impression is ${config.ADS_TRANSACTION_AMOUNT_MAX}, current value is ${bid_impression_mlx}`
+                api_message: `bid_impression_mlx (${payload.bid_impression_mlx}) is greater than the maximum allowed value: max bid per impression is ${config.ADS_TRANSACTION_AMOUNT_MAX}, current value is ${bidImpressionMlx}`
             });
         }
 
@@ -87,17 +87,17 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
              'banner_728x90'
              ];*/
 
-            let advertisement_guid       = Database.generateID(32);
-            let deck_attribute_guid      = Database.generateID(32);
-            let head_line_attribute_guid = Database.generateID(32);
+            let advertisementGuid       = Database.generateID(32);
+            let deckAttributeGuid      = Database.generateID(32);
+            let headlineAttributeGuid = Database.generateID(32);
             if (payload.advertisement_guid) {
-                advertisement_guid       = payload.advertisement_guid;
-                deck_attribute_guid      = payload.head_line_attribute_guid;
-                head_line_attribute_guid = payload.deck_attribute_guid;
+                advertisementGuid       = payload.advertisement_guid;
+                deckAttributeGuid      = payload.deck_attribute_guid;
+                headlineAttributeGuid = payload.head_line_attribute_guid;
             }
 
 
-            const advertisement_type = 'text_headline_deck';
+            const advertisementType = 'text_headline_deck';
             const expiration         = Math.floor(Math.random() * 10) * 86400;
             const fundingAddress     = `${peer.protocolAddressKeyIdentifier}0a0${peer.protocolAddressKeyIdentifier}`;
 
@@ -108,14 +108,14 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
             return advertiserRepository.getCategoryByGuid(payload.advertisement_category_guid).then(categoryData => {
                 const advertisementAttributes = [
                     {
-                        attribute_guid: head_line_attribute_guid,
+                        attribute_guid: headlineAttributeGuid,
                         attribute_type: 'advertisement_headline',
                         object        : undefined,
                         object_key    : undefined,
                         value         : payload.headline
                     },
                     {
-                        attribute_guid: deck_attribute_guid,
+                        attribute_guid: deckAttributeGuid,
                         attribute_type: 'advertisement_deck',
                         object        : undefined,
                         object_key    : undefined,
@@ -125,8 +125,8 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
 
                 if (payload.advertisement_guid) {
                     return advertiserRepository.updateAdvertisement(
-                        advertisement_guid,
-                        advertisement_type,
+                        advertisementGuid,
+                        advertisementType,
                         categoryData.advertisement_category,
                         payload.advertisement_name,
                         payload.url,
@@ -134,7 +134,7 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
                         budgetUSD,
                         payload.budget_daily_mlx,
                         bidImpressionUSD,
-                        bid_impression_mlx,
+                        bidImpressionMlx,
                         expiration,
                         advertisementAttributes
                     ).then(advertisement => res.send({
@@ -144,8 +144,8 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
                 }
                 else {
                     return advertiserRepository.createAdvertisement(
-                        advertisement_guid,
-                        advertisement_type,
+                        advertisementGuid,
+                        advertisementType,
                         categoryData.advertisement_category,
                         payload.advertisement_name,
                         payload.url,
@@ -153,7 +153,7 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
                         budgetUSD,
                         payload.budget_daily_mlx,
                         bidImpressionUSD,
-                        bid_impression_mlx,
+                        bidImpressionMlx,
                         expiration,
                         advertisementAttributes
                     ).then(advertisement => res.send({

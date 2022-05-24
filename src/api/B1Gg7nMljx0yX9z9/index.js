@@ -27,37 +27,37 @@ class _B1Gg7nMljx0yX9z9 extends Endpoint {
         }
 
         const {
-                  p0: from_unix_date
+                  p0: fromUnixDate
               } = req.query;
 
         let pipeline = Promise.resolve();
         pipeline.then(() => {
             const advertiserRepository = database.getRepository('consumer');
-            return advertiserRepository.getAdvertisementWithSettlementLedgerList({payment_date_min: from_unix_date}).then(ledger_list => {
-                if (ledger_list) {
-                    const result_ledger_list = {};
-                    ledger_list.map(item_ledger => {
-                        result_ledger_list[item_ledger.advertisement_guid]                = item_ledger;
-                        result_ledger_list[item_ledger.advertisement_guid].attribute_list = [];
+            return advertiserRepository.getAdvertisementWithSettlementLedgerList({payment_date_min: fromUnixDate}).then(ledgerList => {
+                if (ledgerList) {
+                    const resultLedgerList = {};
+                    ledgerList.map(itemLedger => {
+                        resultLedgerList[itemLedger.advertisement_guid]                = itemLedger;
+                        resultLedgerList[itemLedger.advertisement_guid].attribute_list = [];
                     });
 
-                    let result_advertisement_guid   = _.keys(result_ledger_list);
+                    let resultAdvertisementGuid   = _.keys(resultLedgerList);
                     let consumerAttributeRepository = database.getRepository('consumer_attribute');
-                    consumerAttributeRepository.getAttributeList({'advertisement_guid_in': result_advertisement_guid}).then(advertisement_attribute_list => {
-                        advertisement_attribute_list.forEach(attribute => {
-                            result_ledger_list[attribute.advertisement_guid].attribute_list.push({
+                    consumerAttributeRepository.getAttributeList({'advertisement_guid_in': resultAdvertisementGuid}).then(advertisementAttributeList => {
+                        advertisementAttributeList.forEach(attribute => {
+                            resultLedgerList[attribute.advertisement_guid].attribute_list.push({
                                 attribute_guid: attribute.advertisement_attribute_guid,
                                 attribute_type: attribute.attribute_type,
                                 object        : attribute.object,
                                 value         : attribute.value
                             });
 
-                            result_ledger_list[attribute.advertisement_guid][attribute.attribute_type] = attribute.value;
+                            resultLedgerList[attribute.advertisement_guid][attribute.attribute_type] = attribute.value;
                         });
 
                         res.send({
                             api_status : 'success',
-                            ledger_list: _.values(result_ledger_list)
+                            ledger_list: _.values(resultLedgerList)
                         });
                     }).catch(e => res.send({
                         api_status : 'fail',
