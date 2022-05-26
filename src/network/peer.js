@@ -137,6 +137,7 @@ export class Peer {
         if (this._proxyAdvertisementRequestQueue[data.request_guid] || this._advertisementRequestQueue[data.request_guid] ||
             this._throttledIpAddresses.has(data.node_ip_address) ||
             !data.protocol_address_key_identifier ||
+            !data.device_id ||
             config.MODE_TEST === false && !data.protocol_address_key_identifier.startsWith('1') ||
             config.MODE_TEST === true && data.protocol_address_key_identifier.startsWith('1')) {
             return;
