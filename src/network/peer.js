@@ -168,7 +168,7 @@ export class Peer {
                                 // check ip address
                                 return new Promise((resolve => {
                                     request.get(
-                                        `https://${config.EXTERNAL_API_IP_CHECK}?p0=${data.node_ip_address}`,
+                                        `${config.EXTERNAL_API_IP_CHECK}?p1=${data.node_ip_address}`,
                                         (error, response, body) => {
                                             if (!error && response.statusCode === 200) {
                                                 const data                                        = JSON.parse(body);
