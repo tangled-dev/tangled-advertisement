@@ -16,6 +16,7 @@ export const NETWORK_SHORT_TIME_WAIT_MAX = 1500;
 export const TRANSACTION_ADDRESS_VERSION = MODE_TEST ? 'lal' : '0a0';
 export const TRANSACTION_OUTPUT_MAX      = 127;
 export const TRANSACTION_PROXY_FEE       = 1000;
+export const EXTERNAL_API_IP_CHECK       = 'https://api.millix.com/fYPOSzu2pFsIWN5f7tcLPCbdBvDFM6j148QXIk07/LfQSB646X28p6de9';
 export const ADS_TRANSACTION_IP_MAX      = 8; /* maximum number of ads paid to a single ip address */
 export const ADS_TRANSACTION_AMOUNT_MIN  = 1000;
 export const ADS_TRANSACTION_AMOUNT_MAX  = 999999999;
@@ -80,6 +81,7 @@ export default {
     NETWORK_LONG_TIME_WAIT_MAX,
     ADS_TRANSACTION_AMOUNT_MIN,
     TRANSACTION_OUTPUT_MAX,
+    EXTERNAL_API_IP_CHECK,
     TRANSACTION_PROXY_FEE,
     DATABASE_CONNECTION,
     WEBSOCKET_PROTOCOL,

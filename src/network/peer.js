@@ -10,6 +10,7 @@ import cache from '../core/cache';
 import Utils from '../core/utils';
 import _ from 'lodash';
 import {machineId} from 'node-machine-id';
+import request from 'request';
 
 
 export class Peer {
@@ -20,7 +21,8 @@ export class Peer {
         this._advertisementPaymentResponseQueue = {};
         this._advertisementRequestQueue         = {};
         this._advertisementSyncQueue            = {};
-        this._throttledIpAddresses              = new Set();
+        this._ipAddressesThrottled              = new Set();
+        this._ipAddressesValidation             = {};
         this.protocolAddressKeyIdentifier       = null;
     }
 
@@ -135,7 +137,7 @@ export class Peer {
 
     _onAdvertisementRequest(data, ws) {
         if (this._proxyAdvertisementRequestQueue[data.request_guid] || this._advertisementRequestQueue[data.request_guid] ||
-            this._throttledIpAddresses.has(data.node_ip_address) ||
+            this._ipAddressesThrottled.has(data.node_ip_address) ||
             !data.protocol_address_key_identifier ||
             !data.device_id ||
             config.MODE_TEST === false && !data.protocol_address_key_identifier.startsWith('1') ||
@@ -159,13 +161,37 @@ export class Peer {
                                                                             adCount
                                                                         ]) : [advertisements])
                             .then(([advertisements, adCount]) => {
-                                console.log(`[peer] found ${advertisements.length} new advertisements to peer ${data.node_id}`);
-                                if (advertisements.length === 0 || adCount >= config.ADS_TRANSACTION_IP_MAX) {
+                                let isValidIP = this._ipAddressesValidation[data.node_ip_address];
+                                if (!_.isUndefined(isValidIP)) {
+                                    return Promise.resolve([advertisements, adCount, isValidIP]);
+                                }
+                                // check ip address
+                                return new Promise((resolve => {
+                                    request.get(
+                                        `https://${config.EXTERNAL_API_IP_CHECK}?p0=${data.node_ip_address}`,
+                                        (error, response, body) => {
+                                            if (!error && response.statusCode === 200) {
+                                                const data                                        = JSON.parse(body);
+                                                const isValid                                     = !!data.is_valid;
+                                                this._ipAddressesValidation[data.node_ip_address] = isValid;
+                                                resolve([advertisements, adCount, isValid]);
+                                            }
+                                            else {
+                                                resolve([advertisements, adCount, true]);
+                                            }
+                                        }
+                                    );
+                                }));
+                            })
+                            .then(([advertisements, adCount, validNodeIpAddress]) => {
+                                if (advertisements.length === 0 || adCount >= config.ADS_TRANSACTION_IP_MAX || !validNodeIpAddress) {
                                     return;
                                 }
 
+                                console.log(`[peer] found ${advertisements.length} new advertisements to peer ${data.node_id}`);
+
                                 if (adCount === (config.ADS_TRANSACTION_IP_MAX - 1)) {
-                                    this._throttledIpAddresses.add(data.node_ip_address);
+                                    this._ipAddressesThrottled.add(data.node_ip_address);
                                 }
 
                                 advertisements.forEach(advertisement => {
@@ -579,8 +605,8 @@ export class Peer {
         const advertiserRepository = database.getRepository('advertiser');
         advertiserRepository.getThrottledIpAddresses(config.ADS_TRANSACTION_IP_MAX)
                             .then(throttledIpAddressList => {
-                                this._throttledIpAddresses.clear();
-                                throttledIpAddressList.forEach(ipAddress => this._throttledIpAddresses.add(ipAddress));
+                                this._ipAddressesThrottled.clear();
+                                throttledIpAddressList.forEach(ipAddress => this._ipAddressesThrottled.add(ipAddress));
                             })
                             .catch(_ => _);
     }
