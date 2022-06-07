@@ -125,6 +125,15 @@
       "version_released": "1.0.0",
       "permission": "{\"require_identity\": false, \"private\": false}",
       "enable": true
+    },
+    {
+      "id": "OM11pRn90GhpfYrr",
+      "name": "node_connection_list",
+      "description": "list node connection",
+      "method": "GET",
+      "version_released": "1.19.1",
+      "permission": "{\"require_identity\": true, \"private\": false}",
+      "enable": true
     }
   ]
 }

@@ -52,6 +52,10 @@ class Network {
         return this._wss;
     }
 
+    getNodeListOnline() {
+        return this._nodeListOnline;
+    }
+
     addNode(prefix, ip, port, id, isOnline = false) {
         const url = `${prefix}${ip}:${port}`;
 
