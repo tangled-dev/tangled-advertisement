@@ -202,7 +202,7 @@ export default class Consumer {
                 paymentData.advertisement_guid
             ],
             [
-                `INSERT INTO advertisement_consumer.settlement_ledger (ledger_guid,
+                `INSERT OR REPLACE INTO advertisement_consumer.settlement_ledger (ledger_guid,
                                                                        advertisement_request_guid,
                                                                        protocol_address_hash,
                                                                        protocol_transaction_id,

@@ -163,7 +163,11 @@ export class Peer {
                             .then(([advertisements, adCount]) => {
                                 let isValidIP = this._ipAddressesValidation[data.node_ip_address];
                                 if (!_.isUndefined(isValidIP)) {
-                                    return Promise.resolve([advertisements, adCount, isValidIP]);
+                                    return Promise.resolve([
+                                        advertisements,
+                                        adCount,
+                                        isValidIP
+                                    ]);
                                 }
                                 // check ip address
                                 return new Promise((resolve => {
@@ -174,10 +178,18 @@ export class Peer {
                                                 const data                                        = JSON.parse(body);
                                                 const isValid                                     = !!data.is_valid;
                                                 this._ipAddressesValidation[data.node_ip_address] = isValid;
-                                                resolve([advertisements, adCount, isValid]);
+                                                resolve([
+                                                    advertisements,
+                                                    adCount,
+                                                    isValid
+                                                ]);
                                             }
                                             else {
-                                                resolve([advertisements, adCount, true]);
+                                                resolve([
+                                                    advertisements,
+                                                    adCount,
+                                                    true
+                                                ]);
                                             }
                                         }
                                     );
@@ -450,12 +462,15 @@ export class Peer {
         mutex.lock(['payment_response'], unlock => {
             const consumerRepository = database.getRepository('consumer');
             async.eachSeries(data.advertisement_ledger_list, (paymentData, callback) => {
-                consumerRepository.listAdvertisement({
+                consumerRepository.getAdvertisement({
                     protocol_transaction_id: null,
-                    creative_request_guid  : paymentData.advertisement_request_guid
+                    creative_request_guid  : paymentData.advertisement_request_guid,
+                    advertisement_guid     : paymentData.advertisement_guid
                 }).then(advertisement => {
-                    console.log(`[peer] new payment received for ads display request ${advertisement.advertisement_request_guid}`, data);
-                    return consumerRepository.addAdvertisementPaymentSettlement(paymentData);
+                    if (advertisement) {
+                        console.log(`[peer] new payment received for ads display request ${advertisement.creative_request_guid}`, data);
+                        return consumerRepository.addAdvertisementPaymentSettlement(paymentData);
+                    }
                 }).then(() => callback()).catch(() => callback());
             }, () => unlock());
         });
