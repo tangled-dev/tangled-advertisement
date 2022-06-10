@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node lib/tangled-advertisement.js --debug=true --data-folder=./millix/",
+    "start": "node lib/tangled-advertisement.js --debug=true --data-folder=./millix-tangled/",
     "build": "webpack"
   },
   "keywords": [],
@@ -16,12 +16,14 @@
     "@babel/core": "^7.15.5",
     "@babel/node": "^7.15.4",
     "@babel/plugin-proposal-class-properties": "^7.14.5",
+    "@babel/plugin-transform-runtime": "^7.18.2",
     "@babel/preset-env": "^7.15.6",
     "babel-loader": "^8.2.2",
     "webpack": "^5.52.1",
     "webpack-cli": "^4.8.0"
   },
   "dependencies": {
+    "@babel/runtime": "^7.18.3",
     "async": "^3.2.1",
     "bitcore-lib": "^8.25.10",
     "bitcore-mnemonic": "^8.25.10",

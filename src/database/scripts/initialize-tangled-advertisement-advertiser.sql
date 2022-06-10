@@ -102,6 +102,7 @@ CREATE TABLE advertisement_request_log
     advertisement_guid char(32),
     advertisement_request_guid char(32),
     tangled_guid_consumer char(32),
+    tangled_guid_device   char(64),
     protocol_address_key_identifier char(64),
     ip_address_consumer varchar(45),
     object_guid char(32), -- (i.e. advertisement_attribute)
@@ -115,6 +116,7 @@ CREATE TABLE advertisement_request_log
 );
 CREATE INDEX idx_advertisement_request_log_advertisement_request ON advertisement_request_log ("advertisement_guid", "advertisement_request_guid");
 CREATE INDEX idx_advertisement_request_log_tangled_guid_consumer_status ON advertisement_request_log ("tangled_guid_consumer", "status");
+CREATE INDEX idx_advertisement_request_log_tangled_guid_device_status ON advertisement_request_log ("tangled_guid_device", "status");
 CREATE INDEX idx_advertisement_request_log_status_create_date ON advertisement_request_log ("status", "create_date");
 
 -- replace click log with umbrella table

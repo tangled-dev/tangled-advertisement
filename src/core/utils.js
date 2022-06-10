@@ -57,17 +57,17 @@ class Utils {
         return new Promise((resolve, reject) => {
             const elements = [
                 {
-                    file       : path.join(os.homedir(), config.NODE_CERTIFICATE_KEY_PATH),
+                    file       : config.NODE_CERTIFICATE_KEY_PATH,
                     transformer: KEYUTIL.getKey,
                     key        : 'certificate_private_key'
                 },
                 {
-                    file       : path.join(os.homedir(), config.NODE_KEY_PATH),
+                    file       : config.NODE_KEY_PATH,
                     transformer: (data) => new Bitcore.HDPrivateKey(data),
                     key        : 'node'
                 },
                 {
-                    file       : path.join(os.homedir(), config.NODE_CERTIFICATE_PATH),
+                    file       : config.NODE_CERTIFICATE_PATH,
                     transformer: (pem) => {
                         const x509 = new X509();
                         x509.readCertPEM(pem);
@@ -150,11 +150,11 @@ class Utils {
 
                         const privateKeyPem = KEYUTIL.getPEM(ecKeypair.prvKeyObj, 'PKCS1PRV');
 
-                        fs.writeFile(path.join(os.homedir(), config.NODE_CERTIFICATE_KEY_PATH), privateKeyPem, 'utf8', (err) => {
+                        fs.writeFile(config.NODE_CERTIFICATE_KEY_PATH, privateKeyPem, 'utf8', (err) => {
                             if (err) {
                                 return reject('failed to write node private key file');
                             }
-                            fs.writeFile(path.join(os.homedir(), config.NODE_CERTIFICATE_PATH), certificatePem, 'utf8', (err) => {
+                            fs.writeFile(config.NODE_CERTIFICATE_PATH, certificatePem, 'utf8', (err) => {
                                 if (err) {
                                     return reject('failed to write node certificate file');
                                 }
@@ -191,7 +191,7 @@ class Utils {
 
     loadNodeKey() {
         return new Promise((resolve, reject) => {
-            fs.readFile(path.join(os.homedir(), config.NODE_KEY_PATH), 'utf8', function(err, data) {
+            fs.readFile(config.NODE_KEY_PATH, 'utf8', function(err, data) {
                 if (err) {
                     return reject('couldn\'t read node key');
                 }
@@ -209,7 +209,7 @@ class Utils {
 
     storeNodeKey(key) {
         return new Promise((resolve, reject) => {
-            fs.writeFile(path.join(os.homedir(), config.NODE_KEY_PATH), JSON.stringify({key: key.toString()}, null, '\t'), 'utf8', function(err) {
+            fs.writeFile(config.NODE_KEY_PATH, JSON.stringify({key: key.toString()}, null, '\t'), 'utf8', function(err) {
                 if (err) {
                     return reject('failed to write node key file');
                 }

@@ -336,7 +336,7 @@ export class Database {
 
     initializeTangled() {
         return new Promise(resolve => {
-            this.databaseRootFolder = path.join(os.homedir(), config.DATABASE_CONNECTION.FOLDER);
+            this.databaseRootFolder = config.DATABASE_CONNECTION.FOLDER;
             if (!fs.existsSync(this.databaseRootFolder)) {
                 fs.mkdirSync(path.join(this.databaseRootFolder));
             }
