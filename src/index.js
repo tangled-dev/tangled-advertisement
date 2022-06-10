@@ -51,7 +51,7 @@ if (argv.hostForce) {
 let pidFile      = argv.pidFile;
 const dataFolder = argv.dataFolder ?
                    path.isAbsolute(argv.dataFolder) ? argv.dataFolder : path.join(os.homedir(), argv.dataFolder)
-                                   : undefined;
+                                   : path.join(os.homedir(), config.DATABASE_CONNECTION.FOLDER);
 
 if (dataFolder) {
     config.DATABASE_CONNECTION.FOLDER = dataFolder;
