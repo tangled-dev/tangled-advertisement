@@ -1,5 +1,4 @@
 import {Database} from '../database';
-import _ from 'lodash';
 
 export default class Consumer {
     constructor(database) {
@@ -39,7 +38,8 @@ export default class Consumer {
 
         advertisement.attributes.forEach(attribute => {
             statements.push([
-                `INSERT OR IGNORE INTO advertisement_consumer.advertisement_attribute
+                `INSERT
+                OR IGNORE INTO advertisement_consumer.advertisement_attribute
                  (advertisement_attribute_guid,
                   advertisement_guid,
                   attribute_type_guid,
@@ -59,12 +59,12 @@ export default class Consumer {
         return this.database.runBatchAsync(statements);
     }
 
-    listAdvertisement(where) {
+    listAdvertisement(where, orderBy, limit) {
         return new Promise((resolve, reject) => {
             const {
                       sql,
                       parameters
-                  } = Database.buildQuery('SELECT * FROM advertisement_consumer.advertisement_queue', where);
+                  } = Database.buildQuery('SELECT * FROM advertisement_consumer.advertisement_queue', where, orderBy, limit);
             this.database.all(sql, parameters, (err, data) => {
                 if (err) {
                     return reject(err);
@@ -79,12 +79,14 @@ export default class Consumer {
             const {
                       sql,
                       parameters
-                  } = Database.buildQuery(`SELECT *, 
-            advertisement_consumer.advertisement_queue.advertisement_guid as advertisement_guid,
-            advertisement_consumer.settlement_ledger.create_date as payment_date, 
-            advertisement_consumer.advertisement_queue.create_date as presentation_date  
-            FROM advertisement_consumer.settlement_ledger 
-            JOIN advertisement_consumer.advertisement_queue ON advertisement_consumer.settlement_ledger.ledger_guid = advertisement_consumer.advertisement_queue.ledger_guid`, where);
+                  } = Database.buildQuery(`SELECT *,
+                                                  advertisement_consumer.advertisement_queue.advertisement_guid as advertisement_guid,
+                                                  advertisement_consumer.settlement_ledger.create_date          as payment_date,
+                                                  advertisement_consumer.advertisement_queue.create_date        as presentation_date
+                                           FROM advertisement_consumer.settlement_ledger
+                                                    JOIN advertisement_consumer.advertisement_queue
+                                                         ON advertisement_consumer.settlement_ledger.ledger_guid =
+                                                            advertisement_consumer.advertisement_queue.ledger_guid`, where);
 
             this.database.all(sql, parameters, (err, data) => {
                 if (err) {
@@ -142,31 +144,40 @@ export default class Consumer {
             advertisement.count_impression += 1;
         }
 
-        this.database.run('UPDATE advertisement_consumer.advertisement_queue SET count_impression = ? WHERE queue_id = ?', [
+        this.database.run('UPDATE advertisement_consumer.advertisement_queue SET count_impression = ?1, impression_date_first = COALESCE(impression_date_first, ?2), impression_date_last = ?2 WHERE queue_id = ?3', [
             advertisement.count_impression,
+            Math.floor(Date.now() / 1000),
             advertisement.queue_id
         ], _ => _);
 
         return this.fillAdvertisementAttributes(advertisement);
     }
 
-    getRandomAdvertisement() {
+    getRandomAdvertisementToShow() {
         return new Promise((resolve, reject) => {
             return this.database.get(`SELECT *
                                       FROM advertisement_consumer.advertisement_queue
                                       WHERE count_impression IS NULL
-                                      ORDER BY RANDOM()
-                                      LIMIT 1`, [], (err, advertisement) => {
+                                        AND protocol_transaction_id IS NOT NULL
+                                      ORDER BY RANDOM() LIMIT 1`, [], (err, advertisement) => {
 
                 if (err) {
                     return reject(err);
                 }
 
                 if (!advertisement) {
+
+                    // randomly decide if we should show a new ad (33% prob.)
+                    if (Math.random() <= 2 / 3) {
+                        return Promise.resolve({});
+                    }
+
+                    const afterLastImpressionDate = Math.floor(Date.now() / 1000) - 120;
                     return this.database.get(`SELECT *
                                               FROM advertisement_consumer.advertisement_queue
-                                              ORDER BY RANDOM()
-                                              LIMIT 1`, [], (err, advertisement) => {
+                                              WHERE protocol_transaction_id IS NOT NULL
+                                                AND impression_date_last < ?
+                                              ORDER BY RANDOM() LIMIT 1`, [afterLastImpressionDate], (err, advertisement) => {
 
                         if (err) {
                             return reject(err);
@@ -192,7 +203,10 @@ export default class Consumer {
                 `UPDATE advertisement_consumer.advertisement_queue
                  SET ledger_guid              = ?,
                      protocol_transaction_id  = ?,
-                     protocol_output_position = ?
+                     protocol_output_position = ?,
+                     payment_received_date    = CAST(strftime("%s", "now") AS INTEGER),
+                     payment_request_date     = COALESCE(payment_request_date,
+                                                         CAST(strftime("%s", "now") AS INTEGER))
                  WHERE creative_request_guid = ?
                    AND advertisement_guid = ?`,
                 ledgerGUID,
@@ -202,7 +216,8 @@ export default class Consumer {
                 paymentData.advertisement_guid
             ],
             [
-                `INSERT OR REPLACE INTO advertisement_consumer.settlement_ledger (ledger_guid,
+                `INSERT
+                OR REPLACE INTO advertisement_consumer.settlement_ledger (ledger_guid,
                                                                        advertisement_request_guid,
                                                                        protocol_address_hash,
                                                                        protocol_transaction_id,
@@ -224,29 +239,24 @@ export default class Consumer {
         return this.database.runBatchAsync(statements);
     }
 
+    resetAdvertisementPendingPayment(timestamp) {
+        return this.update({payment_request_date: null}, {
+            'payment_received_date'   : null,
+            'payment_request_date_max': timestamp
+        });
+    }
 
-    pruneAdvertisementRequestWithNoPaymentRequestQueue(timestamp) {
+    update(set, where) {
         return new Promise((resolve, reject) => {
-            this.database.run(`DELETE
-                               FROM advertisement_consumer.advertisement_queue
-                               WHERE create_date <= ? AND protocol_transaction_id IS NULL AND coalesce(count_impression,  0) > 0`, [timestamp], (err) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildUpdate('UPDATE advertisement_consumer.advertisement_queue', set, where);
+            this.database.all(sql, parameters, (err, data) => {
                 if (err) {
-                    console.log('[database] error', err);
                     return reject(err);
                 }
-
-                this.database.run(`DELETE
-                                   FROM advertisement_consumer.advertisement_attribute
-                                   WHERE advertisement_guid NOT IN
-                                         (SELECT advertisement_guid
-                                          FROM advertisement_consumer.advertisement_queue)`, (err) => {
-                    if (err) {
-                        console.log('[database] error', err);
-                        return reject(err);
-                    }
-
-                    resolve();
-                });
+                return resolve(data);
             });
         });
     }

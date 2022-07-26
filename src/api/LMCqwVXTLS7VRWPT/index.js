@@ -19,7 +19,7 @@ class _LMCqwVXTLS7VRWPT extends Endpoint {
      */
     handler(app, req, res) {
         const consumerRepository = database.getRepository('consumer');
-        consumerRepository.getRandomAdvertisement()
+        consumerRepository.getRandomAdvertisementToShow()
             .then(advertisement => res.send(advertisement));
     }
 }

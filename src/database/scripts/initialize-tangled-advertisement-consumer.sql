@@ -17,7 +17,11 @@ CREATE TABLE advertisement_queue
     port_advertiser varchar(10),
     creative_request_guid char(32),
     bid_impression_mlx bigint(16),
+    payment_request_date timestamp NULL CHECK (payment_request_date IS NULL OR (length(payment_request_date) <= 10 AND TYPEOF(payment_request_date) = 'integer')),
+    payment_received_date timestamp NULL CHECK (payment_received_date IS NULL OR (length(payment_received_date) <= 10 AND TYPEOF(payment_received_date) = 'integer')),
     impression_guid char(32), -- (md5 shared with advertiser to confirm the record has not been altered by the consumer)
+    impression_date_first timestamp NULL CHECK (impression_date_first IS NULL OR (length(impression_date_first) <= 10 AND TYPEOF(impression_date_first) = 'integer')),
+    impression_date_last timestamp NULL CHECK (impression_date_last IS NULL OR (length(impression_date_last) <= 10 AND TYPEOF(impression_date_last) = 'integer')),
     advertisement_url varchar(2048),
     protocol_transaction_id varchar(128), -- (populated when the advertisement has settled)
     protocol_output_position int(11),

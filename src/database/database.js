@@ -97,7 +97,11 @@ export class Database {
                     sql += `${key.substring(0, key.lastIndexOf('_'))} <= ?`;
                 }
                 else if (where[key] === null) {
-                    sql += `${key} is NULL`;
+                    if (key.endsWith('!')) {
+                        sql += `${key.substring(0, key.length - 1)} is not NULL`;
+                    } else {
+                        sql += `${key} is NULL`;
+                    }
                     return;
                 }
                 else if (key.endsWith('_in')) {
@@ -168,7 +172,8 @@ export class Database {
         first = true;
         if (where) {
             _.each(_.keys(where), key => {
-                if (where[key] === undefined) {
+                if (where[key] === undefined ||
+                    ((key.endsWith('_begin') || key.endsWith('_min') || key.endsWith('_end') || key.endsWith('_max') || key.endsWith('_in')) && !where[key])) {
                     return;
                 }
 
@@ -185,6 +190,21 @@ export class Database {
                 }
                 else if (key.endsWith('_end') || key.endsWith('_max')) {
                     sql += `${key.substring(0, key.lastIndexOf('_'))} <= ?`;
+                }
+                else if (where[key] === null) {
+                    if (key.endsWith('!')) {
+                        sql += `${key.substring(0, key.length - 1)} is not NULL`;
+                    } else {
+                        sql += `${key} is NULL`;
+                    }
+                    return;
+                }
+                else if (key.endsWith('_in')) {
+                    sql += `${key.substring(0, key.lastIndexOf('_'))} IN (${where[key].map(() => '?').join(',')})`;
+                    for (let parameter of where[key]) {
+                        parameters.push(parameter);
+                    }
+                    return;
                 }
                 else {
                     sql += `${key} = ?`;

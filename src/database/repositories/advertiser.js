@@ -395,41 +395,41 @@ export default class Advertiser {
         });
     }
 
-    
 
     getAdvertisementById(where) {
         return new Promise((resolve, reject) => {
             const {
-                    sql,
-                    parameters
-                } = Database.buildQuery('SELECT * FROM advertisement_advertiser.advertisement',where);
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_advertiser.advertisement', where);
             this.database.get(sql, parameters, (err, advertisement) => {
                 if (err) {
                     return reject(err);
-                }              
-                resolve(advertisement)
+                }
+                resolve(advertisement);
             });
         });
     }
 
     updateAdvertisement(guid, type, category,
-        name, url, fundingAddress, budgetUSD, budgetMLX,
-        bidImpressionUSD, bidImpressionMLX, expiration, attributes) {
-            const typeGUID     = this.normalizationRepository.get(type);
-            const categoryGUID = this.normalizationRepository.get(category);
-            const statements   = [
-                [
-                    `UPDATE advertisement_advertiser.advertisement SET  advertisement_type_guid = ?,
-                                                                    advertisement_category_guid = ?,
-                                                                    advertisement_name = ?,
-                                                                    advertisement_url = ?,
-                                                                    protocol_address_funding = ?,
-                                                                    budget_daily_usd = ?,
-                                                                    budget_daily_mlx = ?,
-                                                                    bid_impression_usd = ?,
-                                                                    bid_impression_mlx = ?,
-                                                                    expiration = ?
-                                                                    WHERE advertisement_guid = ?;`,                
+                        name, url, fundingAddress, budgetUSD, budgetMLX,
+                        bidImpressionUSD, bidImpressionMLX, expiration, attributes) {
+        const typeGUID     = this.normalizationRepository.get(type);
+        const categoryGUID = this.normalizationRepository.get(category);
+        const statements   = [
+            [
+                `UPDATE advertisement_advertiser.advertisement
+                 SET advertisement_type_guid     = ?,
+                     advertisement_category_guid = ?,
+                     advertisement_name          = ?,
+                     advertisement_url           = ?,
+                     protocol_address_funding    = ?,
+                     budget_daily_usd            = ?,
+                     budget_daily_mlx            = ?,
+                     bid_impression_usd          = ?,
+                     bid_impression_mlx          = ?,
+                     expiration                  = ?
+                 WHERE advertisement_guid = ?;`,
                 typeGUID,
                 categoryGUID,
                 name,
@@ -441,33 +441,35 @@ export default class Advertiser {
                 bidImpressionMLX,
                 expiration,
                 guid
-                ]
-            ];
+            ]
+        ];
 
-            attributes.forEach(attribute => {
-                statements.push([
-                    `UPDATE advertisement_advertiser.advertisement_attribute SET value = ?  WHERE advertisement_attribute_guid = ?;`,
-                    attribute.value,
-                    attribute.attribute_guid,
-                ]);
-            });
+        attributes.forEach(attribute => {
+            statements.push([
+                `UPDATE advertisement_advertiser.advertisement_attribute
+                 SET value = ?
+                 WHERE advertisement_attribute_guid = ?;`,
+                attribute.value,
+                attribute.attribute_guid
+            ]);
+        });
 
-            return this.database.runBatchAsync(statements)
-                       .then(() => ({
-                           advertisement_guid      : guid,
-                           advertisement_type      : type,
-                           advertisement_category  : category,
-                           advertisement_name      : name,
-                           advertisement_url       : url,
-                           protocol_address_funding: fundingAddress,
-                           budget_daily_usd        : budgetUSD,
-                           budget_daily_mlx        : budgetMLX,
-                           bid_impression_usd      : bidImpressionUSD,
-                           bid_impression_mlx      : bidImpressionMLX,
-                           expiration,
-                           attributes
-                       }));
-    
+        return this.database.runBatchAsync(statements)
+                   .then(() => ({
+                       advertisement_guid      : guid,
+                       advertisement_type      : type,
+                       advertisement_category  : category,
+                       advertisement_name      : name,
+                       advertisement_url       : url,
+                       protocol_address_funding: fundingAddress,
+                       budget_daily_usd        : budgetUSD,
+                       budget_daily_mlx        : budgetMLX,
+                       bid_impression_usd      : bidImpressionUSD,
+                       bid_impression_mlx      : bidImpressionMLX,
+                       expiration,
+                       attributes
+                   }));
+
     }
 
 
@@ -800,18 +802,12 @@ export default class Advertiser {
     }
 
 
-    pruneAdvertisementRequestWithNoPaymentRequestQueue(timestamp) {
-        // TODO: improve this sql statement
+    pruneAdvertisementPendingPayment(timestamp) {
         return new Promise((resolve, reject) => {
             this.database.run(`DELETE
-                               FROM advertisement_advertiser.advertisement_request_log AS r
-                               WHERE status = 1
-                                 AND create_date <= ?
-                                 AND NOT EXISTS(SELECT ledger_id
-                                                FROM advertisement_advertiser.advertisement_ledger
-                                                WHERE advertisement_request_guid =
-                                                      r.advertisement_request_guid
-                                                  AND advertisement_guid = r.advertisement_guid)`, [timestamp], (err) => {
+                               FROM advertisement_advertiser.advertisement_ledger
+                               WHERE tx_address_deposit_vout_md5 IS NULL
+                                 AND create_date <= ?`, [timestamp], (err) => {
                 if (err) {
                     console.log('[database] error', err);
                     return reject(err);

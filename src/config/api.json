@@ -109,15 +109,6 @@
       "enable": true
     },
     {
-      "id": "QYEgbWuFZs5s7Kud",
-      "name": "request_advertisement_payment",
-      "description": "request payment for a new advertisement",
-      "method": "GET",
-      "version_released": "1.0.0",
-      "permission": "{\"require_identity\": false, \"private\": false}",
-      "enable": true
-    },
-    {
       "id": "pKZdzEZrrdPA1jtl",
       "name": "reset_ad",
       "description": "reset add",

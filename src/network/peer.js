@@ -171,6 +171,10 @@ export class Peer {
                                 }
                                 // check ip address
                                 return new Promise((resolve => {
+                                    if (advertisements.length === 0) { // no need to check ip if there is no ad to serve
+                                        return resolve([advertisements]);
+                                    }
+
                                     request.get(
                                         `${config.EXTERNAL_API_IP_CHECK}?p1=${data.node_ip_address}`,
                                         (error, response, body) => {
@@ -476,39 +480,6 @@ export class Peer {
         });
     }
 
-    requestAdvertisementPayment(queueID) {
-        const consumerRepository = database.getRepository('consumer');
-        consumerRepository.getAdvertisement({
-            queue_id               : queueID,
-            protocol_transaction_id: null
-        }).then(advertisement => {
-            if (advertisement) {
-                console.log(`[peer] advertisement without payment:`, advertisement);
-                const payload = {
-                    type   : 'advertisement_payment_request',
-                    content: {
-                        ..._.mapKeys(_.pick(advertisement, [
-                            'advertisement_guid',
-                            'creative_request_guid'
-                        ]), (_, k) => k === 'creative_request_guid' ? 'request_guid' : k),
-                        message_guid: Database.generateID(32)
-                    }
-                };
-                const data    = JSON.stringify(payload);
-                network.registeredClients.forEach(ws => {
-                    try {
-                        ws.send(data);
-                    }
-                    catch (e) {
-                        console.log('[WARN]: try to send data over a closed connection.');
-                        ws && ws.close();
-                        network._unregisterWebsocket(ws);
-                    }
-                });
-            }
-        });
-    }
-
     processAdvertisementPayment() {
         mutex.lock(['payment'], unlock => {
             console.log(`[peer] processing advertisement payments`);
@@ -599,21 +570,22 @@ export class Peer {
         });
     }
 
-    pruneAdvertisementQueue() {
+    pruneConsumerAdvertisementQueue() {
         console.log('[peer] prune advertisement queue from consumer database');
         let pruneOlderThanTimestamp = Math.floor(Date.now() / 1000 - config.ADS_PRUNE_AGE); // 1 days old
         const consumerRepository    = database.getRepository('consumer');
-        consumerRepository.pruneAdvertisementQueue(pruneOlderThanTimestamp);
+        consumerRepository.pruneAdvertisementQueue(pruneOlderThanTimestamp).then(_ => _);
 
-        pruneOlderThanTimestamp = Math.floor(Date.now() / 1000 - 600); // 10 min
-        return consumerRepository.pruneAdvertisementRequestWithNoPaymentRequestQueue(pruneOlderThanTimestamp);
+        console.log('[peer] prune consumer pending payment queue (2.5 minutes old)');
+        pruneOlderThanTimestamp = Math.floor(Date.now() / 1000) - 150;
+        return consumerRepository.resetAdvertisementPendingPayment(pruneOlderThanTimestamp);
     }
 
-    pruneAdvertisementRequestWithNoPaymentRequestQueue() {
-        console.log('[peer] prune active advertisement request with no payment request in the last 24h');
-        const pruneOlderThanTimestamp = Math.floor(Date.now() / 1000 - 86400);
+    pruneAdvertiserPendingPaymentQueue() {
+        console.log('[peer] prune advertiser pending payment queue (2 minutes old)');
+        const pruneOlderThanTimestamp = Math.floor(Date.now() / 1000) - 120;
         const advertiserRepository    = database.getRepository('advertiser');
-        return advertiserRepository.pruneAdvertisementRequestWithNoPaymentRequestQueue(pruneOlderThanTimestamp);
+        return advertiserRepository.pruneAdvertisementPendingPayment(pruneOlderThanTimestamp);
     }
 
     updateThrottledIpAddress() {
@@ -624,6 +596,74 @@ export class Peer {
                                 throttledIpAddressList.forEach(ipAddress => this._ipAddressesThrottled.add(ipAddress));
                             })
                             .catch(_ => _);
+    }
+
+    sendAdvertisementPaymentRequest(advertisement) {
+        const payload = {
+            type   : 'advertisement_payment_request',
+            content: {
+                ..._.mapKeys(_.pick(advertisement, [
+                    'advertisement_guid',
+                    'creative_request_guid'
+                ]), (_, k) => k === 'creative_request_guid' ? 'request_guid' : k),
+                message_guid: Database.generateID(32)
+            }
+        };
+        const data    = JSON.stringify(payload);
+        network.registeredClients.forEach(ws => {
+            try {
+                ws.send(data);
+            }
+            catch (e) {
+                console.log('[WARN]: try to send data over a closed connection.');
+                ws && ws.close();
+                network._unregisterWebsocket(ws);
+            }
+        });
+    }
+
+    processAdvertisementQueue() {
+        const consumerRepository = database.getRepository('consumer');
+        // check if there is a pending payment
+        return consumerRepository.listAdvertisement({
+            'payment_request_date!': null,
+            'payment_received_date': null
+        }).then(pendingPaymentList => {
+            console.log('[peer] current list of pending payment', pendingPaymentList);
+            if (pendingPaymentList.length === 0) {
+                // check if there is a pending impression
+                return consumerRepository.listAdvertisement({
+                    'payment_request_date!': null,
+                    'impression_date_first': null
+                }).then(pendingImpressionList => {
+                    console.log('[peer] current list of pending impression', pendingPaymentList);
+                    if (pendingImpressionList.length === 0) {
+                        // get a new random add to request payment from
+                        return consumerRepository.listAdvertisement({
+                            'payment_request_date'   : null,
+                            'tangled_guid_advertiser': '1JVpz9EiR7d5WpHPCDGwXA8R4Rmuqy9RBU'
+                        }, 'RANDOM()', 1).then(([advertisement]) => {
+
+                            if (advertisement) {
+                                console.log('[peer] new advertisement being processed', advertisement);
+                                this.sendAdvertisementPaymentRequest(advertisement);
+                                // update advertisement. set payment requested
+                                return consumerRepository.update({
+                                    payment_request_date: Math.floor(Date.now() / 1000)
+                                }, {
+                                    queue_id: advertisement.queue_id
+                                });
+                            }
+                        });
+                    }
+                });
+            }
+            else {
+                const advertisement = pendingPaymentList[0];
+                this.sendAdvertisementPaymentRequest(advertisement);
+                console.log('[peer] advertisement request sent seconds ago ', Math.floor(Date.now() / 1000) - advertisement.payment_request_date);
+            }
+        });
     }
 
     initialize() {
@@ -644,10 +684,11 @@ export class Peer {
 
         task.scheduleTask('peer-request-advertisement-once-on-boot', () => this.requestAdvertisement(), 15000, false, true);
         task.scheduleTask('peer-request-advertisement', () => this.requestAdvertisement(), 60000);
-        task.scheduleTask('peer-sync-advertisement', () => this.requestAdvertisementSync(), 600000);
+        task.scheduleTask('peer-sync-advertisement', () => this.requestAdvertisementSync(), 10000);
         task.scheduleTask('advertisement-payment-process', () => this.processAdvertisementPayment(), 60000);
-        task.scheduleTask('advertisement-queue-prune', () => this.pruneAdvertisementQueue(), 60000);
-        task.scheduleTask('peer-request-advertisement', () => this.requestAdvertisement(), 60000);
+        task.scheduleTask('advertiser-pending-payment-prune', () => this.pruneAdvertiserPendingPaymentQueue(), 30000);
+        task.scheduleTask('advertisement-queue-prune', () => this.pruneConsumerAdvertisementQueue(), 30000);
+        task.scheduleTask('advertisement-queue-process', () => this.processAdvertisementQueue(), 10000, true);
         task.scheduleTask('node-update-throttled-ip-address', () => this.updateThrottledIpAddress(), 60000);
         return Utils.loadNodeKeyAndCertificate()
                     .then(({
@@ -687,7 +728,7 @@ export class Peer {
         task.removeTask('peer-sync-advertisement');
         task.removeTask('advertisement-payment-process');
         task.removeTask('advertisement-queue-prune');
-        task.removeTask('advertisement-request-no-payment-request-prune');
+        task.removeTask('advertisement-queue-process');
         task.removeTask('node-update-throttled-ip-address');
     }
 }
