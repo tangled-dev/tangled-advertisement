@@ -640,8 +640,7 @@ export class Peer {
                     if (pendingImpressionList.length === 0) {
                         // get a new random add to request payment from
                         return consumerRepository.listAdvertisement({
-                            'payment_request_date'   : null,
-                            'tangled_guid_advertiser': '1JVpz9EiR7d5WpHPCDGwXA8R4Rmuqy9RBU'
+                            'payment_request_date'   : null
                         }, 'RANDOM()', 1).then(([advertisement]) => {
 
                             if (advertisement) {
