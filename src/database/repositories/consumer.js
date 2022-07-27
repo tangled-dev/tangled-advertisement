@@ -169,7 +169,7 @@ export default class Consumer {
 
                     // randomly decide if we should show a new ad (33% prob.)
                     if (Math.random() <= 2 / 3) {
-                        return Promise.resolve({});
+                        return resolve({});
                     }
 
                     const afterLastImpressionDate = Math.floor(Date.now() / 1000) - 120;
