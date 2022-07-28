@@ -168,7 +168,7 @@ export default class Consumer {
                 if (!advertisement) {
 
                     // randomly decide if we should show a new ad (33% prob.)
-                    if (Math.random() <= 2 / 3) {
+                    if (Math.random() <= 4 / 5) {
                         return resolve({});
                     }
 
