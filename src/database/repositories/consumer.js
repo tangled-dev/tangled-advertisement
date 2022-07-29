@@ -74,15 +74,14 @@ export default class Consumer {
         });
     }
 
-    getAdvertisementWithSettlementLedgerList(where = '') {
+    getAdvertisementWithSettlementLedgerList(where = {}) {
         return new Promise((resolve, reject) => {
             const {
                       sql,
                       parameters
                   } = Database.buildQuery(`SELECT *,
                                                   advertisement_consumer.advertisement_queue.advertisement_guid as advertisement_guid,
-                                                  advertisement_consumer.settlement_ledger.create_date          as payment_date,
-                                                  advertisement_consumer.advertisement_queue.create_date        as presentation_date
+                                                  advertisement_consumer.advertisement_queue.create_date        as create_date,
                                            FROM advertisement_consumer.settlement_ledger
                                                     JOIN advertisement_consumer.advertisement_queue
                                                          ON advertisement_consumer.settlement_ledger.ledger_guid =
@@ -261,27 +260,43 @@ export default class Consumer {
         });
     }
 
+    pruneAdvertisementAttribute() {
+        return new Promise((resolve, reject) => {
+            this.database.run(`DELETE
+                               FROM advertisement_consumer.advertisement_attribute
+                               WHERE advertisement_guid NOT IN
+                                     (SELECT advertisement_guid
+                                      FROM advertisement_consumer.advertisement_queue)`, (err) => {
+                if (err) {
+                    console.log('[database] error', err);
+                    return reject(err);
+                }
+
+                resolve();
+            });
+        });
+    }
+
     pruneAdvertisementQueue(timestamp) {
         return new Promise((resolve, reject) => {
             this.database.run(`DELETE
                                FROM advertisement_consumer.advertisement_queue
-                               WHERE create_date <= ?`, [timestamp], (err) => {
+                               WHERE create_date <= ?
+                                 AND payment_received_date IS NULL`, [timestamp], (err) => {
                 if (err) {
                     console.log('[database] error', err);
                     return reject(err);
                 }
 
                 this.database.run(`DELETE
-                                   FROM advertisement_consumer.advertisement_attribute
-                                   WHERE advertisement_guid NOT IN
-                                         (SELECT advertisement_guid
-                                          FROM advertisement_consumer.advertisement_queue)`, (err) => {
+                                   FROM advertisement_consumer.advertisement_queue
+                                   WHERE payment_received_date <= ?`, [timestamp], (err) => {
                     if (err) {
                         console.log('[database] error', err);
-                        return reject(err);
+                        return this.pruneAdvertisementAttribute.then(() => reject(err)).then(err1 => reject(err1));
                     }
 
-                    resolve();
+                    return this.pruneAdvertisementAttribute.then(() => resolve()).then(err1 => reject(err1));
                 });
             });
         });
