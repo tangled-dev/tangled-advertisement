@@ -165,29 +165,7 @@ export default class Consumer {
                 }
 
                 if (!advertisement) {
-
-                    // randomly decide if we should show a new ad (33% prob.)
-                    if (Math.random() <= 4 / 5) {
-                        return resolve({});
-                    }
-
-                    const afterLastImpressionDate = Math.floor(Date.now() / 1000) - 120;
-                    return this.database.get(`SELECT *
-                                              FROM advertisement_consumer.advertisement_queue
-                                              WHERE protocol_transaction_id IS NOT NULL
-                                                AND impression_date_last < ?
-                                              ORDER BY RANDOM() LIMIT 1`, [afterLastImpressionDate], (err, advertisement) => {
-
-                        if (err) {
-                            return reject(err);
-                        }
-
-                        if (!advertisement) {
-                            return resolve({});
-                        }
-
-                        return this.processRandomAdvertisement(advertisement).then(resolve).catch(reject);
-                    });
+                    return resolve({});
                 }
 
                 return this.processRandomAdvertisement(advertisement).then(resolve).catch(reject);
