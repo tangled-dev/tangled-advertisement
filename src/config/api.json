@@ -125,6 +125,15 @@
       "version_released": "1.19.1",
       "permission": "{\"require_identity\": true, \"private\": false}",
       "enable": true
+    },
+    {
+      "id": "AQ82j88MiEyoe3zi",
+      "name": "get_last_advertisement_payment_date",
+      "description": "the timestamp when the last advertisement payment was received",
+      "method": "GET",
+      "version_released": "1.20.3",
+      "permission": "{\"require_identity\": true, \"private\": false}",
+      "enable": true
     }
   ]
 }
