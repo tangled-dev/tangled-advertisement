@@ -630,37 +630,30 @@ export class Peer {
             'payment_received_date': null
         }).then(pendingPaymentList => {
             console.log('[peer] current list of pending payment', pendingPaymentList);
-            if (pendingPaymentList.length === 0) {
-                // check if there is a pending impression
-                return consumerRepository.listAdvertisement({
-                    'payment_request_date!': null,
-                    'impression_date_first': null
-                }).then(pendingImpressionList => {
-                    console.log('[peer] current list of pending impression', pendingPaymentList);
-                    if (pendingImpressionList.length === 0) {
-                        // get a new random add to request payment from
-                        return consumerRepository.listAdvertisement({
-                            'payment_request_date'   : null
-                        }, 'RANDOM()', 1).then(([advertisement]) => {
-
-                            if (advertisement) {
-                                console.log('[peer] new advertisement being processed', advertisement);
-                                this.sendAdvertisementPaymentRequest(advertisement);
-                                // update advertisement. set payment requested
-                                return consumerRepository.update({
-                                    payment_request_date: Math.floor(Date.now() / 1000)
-                                }, {
-                                    queue_id: advertisement.queue_id
-                                });
-                            }
-                        });
-                    }
-                });
+            if (pendingPaymentList.length <= 10) {
+                // get a new random add to request payment from
+                return consumerRepository.getRandomAdvertisementToRequestPayment()
+                                         .then(advertisementCandidateList => {
+                                             return new Promise(resolve => {
+                                                 async.eachSeries(advertisementCandidateList, (advertisement, callback) => {
+                                                     console.log('[peer] new advertisement being processed', advertisement);
+                                                     this.sendAdvertisementPaymentRequest(advertisement);
+                                                     // update advertisement.
+                                                     // set payment requested
+                                                     consumerRepository.update({
+                                                         payment_request_date: Math.floor(Date.now() / 1000)
+                                                     }, {
+                                                         queue_id: advertisement.queue_id
+                                                     }).then(() => callback()).catch(() => callback());
+                                                 }, () => resolve());
+                                             });
+                                         });
             }
             else {
-                const advertisement = pendingPaymentList[0];
-                this.sendAdvertisementPaymentRequest(advertisement);
-                console.log('[peer] advertisement request sent seconds ago ', Math.floor(Date.now() / 1000) - advertisement.payment_request_date);
+                for(const advertisement of pendingPaymentList){
+                    this.sendAdvertisementPaymentRequest(advertisement);
+                    console.log('[peer] advertisement request sent seconds ago ', Math.floor(Date.now() / 1000) - advertisement.payment_request_date);
+                }
             }
         });
     }

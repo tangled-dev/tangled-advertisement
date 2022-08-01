@@ -74,6 +74,29 @@ export default class Consumer {
         });
     }
 
+    getRandomAdvertisementToRequestPayment() {
+        return new Promise((resolve, reject) => {
+            this.database.all(`SELECT *
+                               FROM (SELECT *
+                                     FROM advertisement_consumer.advertisement_queue
+                                     WHERE payment_request_date IS NULL
+                                       AND tangled_guid_advertiser NOT IN
+                                           (SELECT DISTINCT tangled_guid_advertiser
+                                            FROM advertisement_consumer.advertisement_queue
+                                            WHERE payment_request_date IS NOT NULL
+                                              AND impression_date_first IS NULL)
+                                     ORDER BY RANDOM())
+                               GROUP BY tangled_guid_advertiser
+                               ORDER BY RANDOM() LIMIT 10`, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+
+                resolve(data);
+            });
+        });
+    }
+
     getAdvertisementWithSettlementLedgerList(where = {}) {
         return new Promise((resolve, reject) => {
             const {
@@ -81,7 +104,7 @@ export default class Consumer {
                       parameters
                   } = Database.buildQuery(`SELECT *,
                                                   advertisement_consumer.advertisement_queue.advertisement_guid as advertisement_guid,
-                                                  advertisement_consumer.advertisement_queue.create_date        as create_date,
+                                                  advertisement_consumer.advertisement_queue.create_date        as create_date
                                            FROM advertisement_consumer.settlement_ledger
                                                     JOIN advertisement_consumer.advertisement_queue
                                                          ON advertisement_consumer.settlement_ledger.ledger_guid =
@@ -271,11 +294,25 @@ export default class Consumer {
                                    WHERE payment_received_date <= ?`, [timestamp], (err) => {
                     if (err) {
                         console.log('[database] error', err);
-                        return this.pruneAdvertisementAttribute.then(() => reject(err)).then(err1 => reject(err1));
+                        return this.pruneAdvertisementAttribute().then(() => reject(err)).then(err1 => reject(err1));
                     }
 
-                    return this.pruneAdvertisementAttribute.then(() => resolve()).then(err1 => reject(err1));
+                    return this.pruneAdvertisementAttribute().then(() => resolve()).then(err1 => reject(err1));
                 });
+            });
+        });
+    }
+
+    getLastAdvertisementPaymentDate() {
+        return new Promise((resolve, reject) => {
+            this.database.get(`SELECT max(payment_received_date) as last_payment_received_date
+                               FROM advertisement_consumer.advertisement_queue`, (err, data) => {
+                if (err) {
+                    console.log('[database] error', err);
+                    return reject(err);
+                }
+
+                resolve(data?.last_payment_received_date);
             });
         });
     }
