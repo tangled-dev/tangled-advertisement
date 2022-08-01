@@ -33,7 +33,7 @@ class _B1Gg7nMljx0yX9z9 extends Endpoint {
         let pipeline = Promise.resolve();
         pipeline.then(() => {
             const advertiserRepository = database.getRepository('consumer');
-            return advertiserRepository.getAdvertisementWithSettlementLedgerList({payment_date_min: fromUnixDate}).then(ledgerList => {
+            return advertiserRepository.getAdvertisementWithSettlementLedgerList({payment_received_date_min: fromUnixDate}).then(ledgerList => {
                 if (ledgerList) {
                     const resultLedgerList = {};
                     ledgerList.map(itemLedger => {
@@ -41,9 +41,9 @@ class _B1Gg7nMljx0yX9z9 extends Endpoint {
                         resultLedgerList[itemLedger.advertisement_guid].attribute_list = [];
                     });
 
-                    let resultAdvertisementGuid   = _.keys(resultLedgerList);
+                    let resultAdvertisementGuid     = _.keys(resultLedgerList);
                     let consumerAttributeRepository = database.getRepository('consumer_attribute');
-                    consumerAttributeRepository.getAttributeList({'advertisement_guid_in': resultAdvertisementGuid}).then(advertisementAttributeList => {
+                    consumerAttributeRepository.getAttributeList({advertisement_guid_in: resultAdvertisementGuid}).then(advertisementAttributeList => {
                         advertisementAttributeList.forEach(attribute => {
                             resultLedgerList[attribute.advertisement_guid].attribute_list.push({
                                 attribute_guid: attribute.advertisement_attribute_guid,
