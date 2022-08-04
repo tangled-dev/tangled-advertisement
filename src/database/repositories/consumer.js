@@ -77,17 +77,18 @@ export default class Consumer {
     getRandomAdvertisementToRequestPayment() {
         return new Promise((resolve, reject) => {
             this.database.all(`SELECT *
-                               FROM (SELECT *
-                                     FROM advertisement_consumer.advertisement_queue
-                                     WHERE payment_request_date IS NULL
-                                       AND tangled_guid_advertiser NOT IN
-                                           (SELECT DISTINCT tangled_guid_advertiser
-                                            FROM advertisement_consumer.advertisement_queue
-                                            WHERE payment_request_date IS NOT NULL
-                                              AND impression_date_first IS NULL)
-                                     ORDER BY RANDOM())
-                               GROUP BY tangled_guid_advertiser
-                               ORDER BY RANDOM() LIMIT 10`, (err, data) => {
+                               FROM (SELECT *, RANDOM() as position
+                                     FROM (SELECT *, RANDOM() as position
+                                         FROM advertisement_queue
+                                         WHERE payment_request_date IS NULL
+                                         AND tangled_guid_advertiser NOT IN
+                                         (SELECT DISTINCT tangled_guid_advertiser
+                                         FROM advertisement_queue
+                                         WHERE payment_request_date IS NOT NULL
+                                         AND impression_date_first IS NULL)
+                                         ORDER BY position)
+                                     GROUP BY tangled_guid_advertiser
+                                     ORDER BY position) LIMIT 10`, (err, data) => {
                 if (err) {
                     return reject(err);
                 }
@@ -299,6 +300,24 @@ export default class Consumer {
 
                     return this.pruneAdvertisementAttribute().then(() => resolve()).then(err1 => reject(err1));
                 });
+            });
+        });
+    }
+
+    deleteAdvertisement(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('DELETE FROM advertisement_consumer.advertisement_queue', where);
+
+            this.database.run(sql, parameters, (err) => {
+                if (err) {
+                    console.log('[database] error', err);
+                    return reject(err);
+                }
+
+                return this.pruneAdvertisementAttribute().then(() => resolve()).then(err1 => reject(err1));
             });
         });
     }

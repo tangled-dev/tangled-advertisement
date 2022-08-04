@@ -409,50 +409,91 @@ export class Peer {
 
         console.log(`[peer] payment request received from node ${ws.nodeID}:`, data);
         const advertiserRepository = database.getRepository('advertiser');
-        advertiserRepository.getAdvertisementLedger({
+
+        advertiserRepository.getAdvertisement({
             advertisement_guid        : data.advertisement_guid,
-            advertisement_request_guid: data.request_guid
-        })
-                            .then(advertisementLedgerData => {
+            status                    : 1
+        }).then(advertisement => {
+            if (!advertisement) {
+                return;
+            }
 
-                                if (advertisementLedgerData) {
-                                    const normalizationRepository = database.getRepository('normalization');
-                                    const message                 = {
-                                        'message_guid'           : Database.generateID(32),
-                                        advertisement_ledger_list: [
-                                            {
-                                                'protocol_transaction_id' : _.find(advertisementLedgerData.attributes, {attribute_type_guid: normalizationRepository.get('protocol_transaction_id')}).value,
-                                                'protocol_output_position': parseInt(_.find(advertisementLedgerData.attributes, {attribute_type_guid: normalizationRepository.get('protocol_output_position')}).value),
-                                                'deposit'                 : advertisementLedgerData.withdrawal,
-                                                ..._.pick(advertisementLedgerData, [
-                                                    'advertisement_request_guid',
-                                                    'advertisement_guid',
-                                                    'tx_address_deposit_vout_md5',
-                                                    'price_usd'
-                                                ])
-                                            }
-                                        ]
-                                    };
+            advertiserRepository.getAdvertisementRequestLog({
+                advertisement_guid        : data.advertisement_guid,
+                advertisement_request_guid: data.request_guid,
+                status                    : 1
+            }).then(advertisementRequest => {
+                if (!advertisementRequest) {
 
-                                    this._advertisementPaymentResponseQueue[message.message_guid] = {
-                                        timestamp: Date.now()
-                                    };
-                                    this.propagateRequest('advertisement_payment_response', message);
-                                    return;
+                    advertiserRepository.listAdvertisementRequestLog({
+                        advertisement_request_guid: data.request_guid,
+                        status                    : 1
+                    }).then(advertisementRequestList => {
+                        const error   = advertisementRequestList.length === 0 ? 'creative_request_not_found' : 'advertisement_not_found';
+                        const message = {
+                            'message_guid' : Database.generateID(32),
+                            'error'        : error,
+                            'advertisement': {
+                                advertisement_guid        : data.advertisement_guid,
+                                advertisement_request_guid: data.request_guid,
+                                device_id                 : data.device_id
+                            }
+                        };
+
+                        this._advertisementPaymentResponseQueue[message.message_guid] = {
+                            timestamp: Date.now()
+                        };
+                        this.propagateRequest('advertisement_payment_response', message);
+                    });
+                    return;
+                }
+
+                return advertiserRepository.getAdvertisementLedger({
+                    advertisement_guid        : data.advertisement_guid,
+                    advertisement_request_guid: data.request_guid
+                }).then(advertisementLedgerData => {
+
+                    if (advertisementLedgerData) {
+                        const normalizationRepository = database.getRepository('normalization');
+                        const message                 = {
+                            'message_guid'           : Database.generateID(32),
+                            advertisement_ledger_list: [
+                                {
+                                    'protocol_transaction_id' : _.find(advertisementLedgerData.attributes, {attribute_type_guid: normalizationRepository.get('protocol_transaction_id')}).value,
+                                    'protocol_output_position': parseInt(_.find(advertisementLedgerData.attributes, {attribute_type_guid: normalizationRepository.get('protocol_output_position')}).value),
+                                    'deposit'                 : advertisementLedgerData.withdrawal,
+                                    ..._.pick(advertisementLedgerData, [
+                                        'advertisement_request_guid',
+                                        'advertisement_guid',
+                                        'tx_address_deposit_vout_md5',
+                                        'price_usd'
+                                    ])
                                 }
+                            ]
+                        };
 
-                                return advertiserRepository.getAdvertisementIfPaymentNotFound(data.advertisement_guid, data.request_guid)
-                                                           .then(advertisement => {
-                                                               if (!advertisement) {
-                                                                   console.log(`[peer] cannot create payment for ${data.advertisement_guid}:${data.request_guid}`);
-                                                                   return;
-                                                               }
-                                                               console.log(`[peer] advertisement data for pending payment`, advertisement);
-                                                               console.log(`[peer] add pending payment to request ${data.request_guid}`);
-                                                               return advertiserRepository.addAdvertisementPayment(data.advertisement_guid, data.request_guid, Math.min(config.ADS_TRANSACTION_AMOUNT_MAX, advertisement.bid_impression_mlx), 'withdrawal:external')
-                                                                                          .then(advertisementLedgerData => console.log(`[peer] advertisement ledger record created`, advertisementLedgerData));
-                                                           });
-                            });
+                        this._advertisementPaymentResponseQueue[message.message_guid] = {
+                            timestamp: Date.now()
+                        };
+                        this.propagateRequest('advertisement_payment_response', message);
+                        return;
+                    }
+
+                    return advertiserRepository.getAdvertisementIfPaymentNotFound(data.advertisement_guid, data.request_guid)
+                                               .then(advertisement => {
+                                                   if (!advertisement) {
+                                                       console.log(`[peer] cannot create payment for ${data.advertisement_guid}:${data.request_guid}`);
+                                                       return;
+                                                   }
+                                                   console.log(`[peer] advertisement data for pending payment`, advertisement);
+                                                   console.log(`[peer] add pending payment to request ${data.request_guid}`);
+                                                   return advertiserRepository.addAdvertisementPayment(data.advertisement_guid, data.request_guid, Math.min(config.ADS_TRANSACTION_AMOUNT_MAX, advertisement.bid_impression_mlx), 'withdrawal:external')
+                                                                              .then(advertisementLedgerData => console.log(`[peer] advertisement ledger record created`, advertisementLedgerData));
+                                               });
+                });
+            });
+
+        });
     }
 
     _onAdvertisementPaymentResponse(data, ws) {
@@ -461,6 +502,21 @@ export class Peer {
         }
 
         this._advertisementPaymentRequestQueue[data.message_guid] = {timestamp: Date.now()};
+
+        if (data.error && data.advertisement.device_id === this.deviceID) {
+            const consumerRepository = database.getRepository('consumer');
+            const where              = {
+                creative_request_guid: data.advertisement.advertisement_request_guid,
+                advertisement_guid   : data.advertisement.advertisement_guid,
+                payment_received_date: null
+            };
+            if (data.error === 'creative_request_not_found') {
+                delete where['advertisement_guid'];
+            }
+            consumerRepository.deleteAdvertisement(where).then(_ => _);
+            return;
+        }
+
         this.propagateRequest('advertisement_payment_response', data, ws);
 
         mutex.lock(['payment_response'], unlock => {
@@ -606,6 +662,7 @@ export class Peer {
                     'advertisement_guid',
                     'creative_request_guid'
                 ]), (_, k) => k === 'creative_request_guid' ? 'request_guid' : k),
+                device_id   : this.deviceID,
                 message_guid: Database.generateID(32)
             }
         };
@@ -630,6 +687,12 @@ export class Peer {
             'payment_received_date': null
         }).then(pendingPaymentList => {
             console.log('[peer] current list of pending payment', pendingPaymentList);
+
+            for (const advertisement of pendingPaymentList) {
+                this.sendAdvertisementPaymentRequest(advertisement);
+                console.log('[peer] advertisement request sent seconds ago ', Math.floor(Date.now() / 1000) - advertisement.payment_request_date);
+            }
+
             if (pendingPaymentList.length <= 10) {
                 // get a new random add to request payment from
                 return consumerRepository.getRandomAdvertisementToRequestPayment()
@@ -648,12 +711,6 @@ export class Peer {
                                                  }, () => resolve());
                                              });
                                          });
-            }
-            else {
-                for(const advertisement of pendingPaymentList){
-                    this.sendAdvertisementPaymentRequest(advertisement);
-                    console.log('[peer] advertisement request sent seconds ago ', Math.floor(Date.now() / 1000) - advertisement.payment_request_date);
-                }
             }
         });
     }
@@ -680,7 +737,7 @@ export class Peer {
         task.scheduleTask('advertisement-payment-process', () => this.processAdvertisementPayment(), 60000);
         task.scheduleTask('advertiser-pending-payment-prune', () => this.pruneAdvertiserPendingPaymentQueue(), 30000);
         task.scheduleTask('advertisement-queue-prune', () => this.pruneConsumerAdvertisementQueue(), 30000);
-        task.scheduleTask('advertisement-queue-process', () => this.processAdvertisementQueue(), 10000, true);
+        task.scheduleTask('advertisement-queue-process', () => this.processAdvertisementQueue(), 15000, true);
         task.scheduleTask('node-update-throttled-ip-address', () => this.updateThrottledIpAddress(), 60000);
         return Utils.loadNodeKeyAndCertificate()
                     .then(({

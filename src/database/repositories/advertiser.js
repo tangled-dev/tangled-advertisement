@@ -518,6 +518,21 @@ export default class Advertiser {
         });
     }
 
+    listAdvertisementRequestLog(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_advertiser.advertisement_request_log', where);
+            this.database.all(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve(data);
+            });
+        });
+    }
+
     listAdvertisementLedger(where, limit) {
         return new Promise((resolve, reject) => {
             const {
