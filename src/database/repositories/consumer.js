@@ -335,4 +335,23 @@ export default class Consumer {
             });
         });
     }
+
+    getTotalAdvertisementPayment(where = {}) {
+        return new Promise((resolve, reject) => {
+            where = {
+                'payment_received_date!': null,
+                ...where
+            };
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT SUM(bid_impression_mlx) as total FROM advertisement_consumer.advertisement_queue', where);
+            this.database.get(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve(data.total);
+            });
+        });
+    }
 }
