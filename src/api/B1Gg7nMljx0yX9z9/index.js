@@ -35,24 +35,32 @@ class _B1Gg7nMljx0yX9z9 extends Endpoint {
             const advertiserRepository = database.getRepository('consumer');
             return advertiserRepository.getAdvertisementWithSettlementLedgerList({payment_received_date_min: fromUnixDate}).then(ledgerList => {
                 if (ledgerList) {
-                    const resultLedgerList = {};
+                    const resultLedgerList      = {};
+                    const advertisementItemKeys = {};
                     ledgerList.map(itemLedger => {
-                        resultLedgerList[itemLedger.advertisement_guid]                = itemLedger;
-                        resultLedgerList[itemLedger.advertisement_guid].attribute_list = [];
+                        const key = `${itemLedger.advertisement_guid}_${itemLedger.creative_request_guid}`;
+                        if (!advertisementItemKeys[itemLedger.advertisement_guid]) {
+                            advertisementItemKeys[itemLedger.advertisement_guid] = [];
+                        }
+                        advertisementItemKeys[itemLedger.advertisement_guid].push(key);
+                        resultLedgerList[key]                = itemLedger;
+                        resultLedgerList[key].attribute_list = [];
                     });
 
-                    let resultAdvertisementGuid     = _.keys(resultLedgerList);
+                    let resultAdvertisementGuid     = _.keys(advertisementItemKeys);
                     let consumerAttributeRepository = database.getRepository('consumer_attribute');
                     consumerAttributeRepository.getAttributeList({advertisement_guid_in: resultAdvertisementGuid}).then(advertisementAttributeList => {
                         advertisementAttributeList.forEach(attribute => {
-                            resultLedgerList[attribute.advertisement_guid].attribute_list.push({
-                                attribute_guid: attribute.advertisement_attribute_guid,
-                                attribute_type: attribute.attribute_type,
-                                object        : attribute.object,
-                                value         : attribute.value
-                            });
+                            advertisementItemKeys[attribute.advertisement_guid].forEach(key => {
+                                resultLedgerList[key].attribute_list.push({
+                                    attribute_guid: attribute.advertisement_attribute_guid,
+                                    attribute_type: attribute.attribute_type,
+                                    object        : attribute.object,
+                                    value         : attribute.value
+                                });
 
-                            resultLedgerList[attribute.advertisement_guid][attribute.attribute_type] = attribute.value;
+                                resultLedgerList[key][attribute.attribute_type] = attribute.value;
+                            });
                         });
 
                         res.send({
