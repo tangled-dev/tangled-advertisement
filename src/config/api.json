@@ -134,6 +134,15 @@
       "version_released": "1.20.3",
       "permission": "{\"require_identity\": true, \"private\": false}",
       "enable": true
+    },
+    {
+      "id": "JXPRrbJlwOMnDzjr",
+      "name": "get_total_ad_payment",
+      "description": "the total ad payment",
+      "method": "GET",
+      "version_released": "1.20.3",
+      "permission": "{\"require_identity\": true, \"private\": false}",
+      "enable": true
     }
   ]
 }
