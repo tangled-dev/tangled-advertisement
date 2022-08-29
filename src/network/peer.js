@@ -26,6 +26,23 @@ export class Peer {
         this.protocolAddressKeyIdentifier       = null;
     }
 
+    _pruneMessageQueue(queue) {
+        _.each(queue, (value, key) => {
+            if (value?.timestamp < Date.now() - 300000) {
+                delete queue[key];
+            }
+        });
+    }
+
+    clearMessageQueues() {
+        this._pruneMessageQueue(this._proxyAdvertisementRequestQueue);
+        this._pruneMessageQueue(this._proxyAdvertisementSyncQueue);
+        this._pruneMessageQueue(this._advertisementPaymentRequestQueue);
+        this._pruneMessageQueue(this._advertisementPaymentResponseQueue);
+        this._pruneMessageQueue(this._advertisementRequestQueue);
+        this._pruneMessageQueue(this._advertisementSyncQueue);
+    }
+
     _onNewAdvertisement(data) {
         if (this._proxyAdvertisementRequestQueue[data.request_guid]) {
             const ws      = this._proxyAdvertisementRequestQueue[data.request_guid].ws;
@@ -411,8 +428,8 @@ export class Peer {
         const advertiserRepository = database.getRepository('advertiser');
 
         advertiserRepository.getAdvertisement({
-            advertisement_guid        : data.advertisement_guid,
-            status                    : 1
+            advertisement_guid: data.advertisement_guid,
+            status            : 1
         }).then(advertisement => {
             if (!advertisement) {
                 return;
@@ -739,6 +756,7 @@ export class Peer {
         task.scheduleTask('advertisement-queue-prune', () => this.pruneConsumerAdvertisementQueue(), 30000);
         task.scheduleTask('advertisement-queue-process', () => this.processAdvertisementQueue(), 15000, true);
         task.scheduleTask('node-update-throttled-ip-address', () => this.updateThrottledIpAddress(), 60000);
+        task.scheduleTask('node-prune-message', () => this.clearMessageQueues(), 60000);
         return Utils.loadNodeKeyAndCertificate()
                     .then(({
                                node_id       : nodeID,
