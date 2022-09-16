@@ -15,15 +15,16 @@ import request from 'request';
 
 export class Peer {
     constructor() {
-        this._proxyAdvertisementRequestQueue    = {};
-        this._proxyAdvertisementSyncQueue       = {};
-        this._advertisementPaymentRequestQueue  = {};
-        this._advertisementPaymentResponseQueue = {};
-        this._advertisementRequestQueue         = {};
-        this._advertisementSyncQueue            = {};
-        this._ipAddressesThrottled              = new Set();
-        this._ipAddressesValidation             = {};
-        this.protocolAddressKeyIdentifier       = null;
+        this._proxyAdvertisementRequestQueue        = {};
+        this._proxyAdvertisementSyncQueue           = {};
+        this._proxyAdvertisementPaymentRequestQueue = {};
+        this._advertisementPaymentRequestQueue      = {};
+        this._advertisementRequestQueue             = {};
+        this._advertisementSyncQueue                = {};
+        this._ipAddressesThrottled                  = new Set();
+        this._ipAddressesValidation                 = {};
+        this._messageResponseQueue                  = {};
+        this.protocolAddressKeyIdentifier           = null;
     }
 
     _pruneMessageQueue(queue) {
@@ -37,13 +38,22 @@ export class Peer {
     clearMessageQueues() {
         this._pruneMessageQueue(this._proxyAdvertisementRequestQueue);
         this._pruneMessageQueue(this._proxyAdvertisementSyncQueue);
+        this._pruneMessageQueue(this._proxyAdvertisementPaymentRequestQueue);
         this._pruneMessageQueue(this._advertisementPaymentRequestQueue);
-        this._pruneMessageQueue(this._advertisementPaymentResponseQueue);
         this._pruneMessageQueue(this._advertisementRequestQueue);
+        this._pruneMessageQueue(this._messageResponseQueue);
         this._pruneMessageQueue(this._advertisementSyncQueue);
     }
 
     _onNewAdvertisement(data) {
+        if (!data.message_guid || this._messageResponseQueue[data.message_guid]) {
+            return;
+        }
+
+        this._messageResponseQueue[data.message_guid] = {
+            timestamp: Date.now()
+        };
+
         if (this._proxyAdvertisementRequestQueue[data.request_guid]) {
             const ws      = this._proxyAdvertisementRequestQueue[data.request_guid].ws;
             const payload = {
@@ -51,32 +61,37 @@ export class Peer {
                 content: data
             };
             ws.send(JSON.stringify(payload));
-            return;
         }
-        else if (!this._advertisementRequestQueue[data.request_guid]) {
-            return;
+        else if (this._advertisementRequestQueue[data.request_guid]) {
+            const {
+                      advertisement_list: advertisements,
+                      node_id           : nodeID,
+                      node_ip_address   : nodeIPAddress,
+                      node_port         : nodePort,
+                      request_guid      : requestGUID
+                  } = data;
+            console.log(`[peer] new advertisements ${JSON.stringify(advertisements, null, 4)}`);
+            const consumerRepository = database.getRepository('consumer');
+            async.eachSeries(advertisements, (advertisement, callback) => {
+                if (advertisement.bid_impression_mlx < config.ADS_TRANSACTION_AMOUNT_MIN) {
+                    return callback();
+                }
+                consumerRepository.addAdvertisement(advertisement, nodeID, nodeIPAddress, nodePort, requestGUID)
+                                  .then(() => callback())
+                                  .catch(() => callback());
+            });
         }
-
-        const {
-                  advertisement_list: advertisements,
-                  node_id           : nodeID,
-                  node_ip_address   : nodeIPAddress,
-                  node_port         : nodePort,
-                  request_guid      : requestGUID
-              } = data;
-        console.log(`[peer] new advertisements ${JSON.stringify(advertisements, null, 4)}`);
-        const consumerRepository = database.getRepository('consumer');
-        async.eachSeries(advertisements, (advertisement, callback) => {
-            if (advertisement.bid_impression_mlx < config.ADS_TRANSACTION_AMOUNT_MIN) {
-                return callback();
-            }
-            consumerRepository.addAdvertisement(advertisement, nodeID, nodeIPAddress, nodePort, requestGUID)
-                              .then(() => callback())
-                              .catch(() => callback());
-        });
     }
 
     _onSyncAdvertisement(data) {
+        if (!data.message_guid || this._messageResponseQueue[data.message_guid]) {
+            return;
+        }
+
+        this._messageResponseQueue[data.message_guid] = {
+            timestamp: Date.now()
+        };
+
         if (this._proxyAdvertisementSyncQueue[data.request_guid]) {
             const ws      = this._proxyAdvertisementSyncQueue[data.request_guid].ws;
             const payload = {
@@ -84,28 +99,25 @@ export class Peer {
                 content: data
             };
             ws.send(JSON.stringify(payload));
-            return;
         }
-        else if (!this._advertisementSyncQueue[data.request_guid]) {
-            return;
+        else if (this._advertisementSyncQueue[data.request_guid]) {
+            const {
+                      advertisement_list: advertisements,
+                      node_id           : nodeID,
+                      node_ip_address   : nodeIPAddress,
+                      node_port         : nodePort
+                  } = data;
+            console.log(`[peer] new advertisements ${JSON.stringify(advertisements, null, 4)}`);
+            const consumerRepository = database.getRepository('consumer');
+            async.eachSeries(advertisements, (advertisement, callback) => {
+                if (advertisement.bid_impression_mlx < config.ADS_TRANSACTION_AMOUNT_MIN) {
+                    return callback();
+                }
+                consumerRepository.addAdvertisement(advertisement, nodeID, nodeIPAddress, nodePort, advertisement.advertisement_request_guid)
+                                  .then(() => callback())
+                                  .catch(() => callback());
+            });
         }
-
-        const {
-                  advertisement_list: advertisements,
-                  node_id           : nodeID,
-                  node_ip_address   : nodeIPAddress,
-                  node_port         : nodePort
-              } = data;
-        console.log(`[peer] new advertisements ${JSON.stringify(advertisements, null, 4)}`);
-        const consumerRepository = database.getRepository('consumer');
-        async.eachSeries(advertisements, (advertisement, callback) => {
-            if (advertisement.bid_impression_mlx < config.ADS_TRANSACTION_AMOUNT_MIN) {
-                return callback();
-            }
-            consumerRepository.addAdvertisement(advertisement, nodeID, nodeIPAddress, nodePort, advertisement.advertisement_request_guid)
-                              .then(() => callback())
-                              .catch(() => callback());
-        });
     }
 
     _onNewPeer(peer, ws) {
@@ -145,6 +157,7 @@ export class Peer {
                                         node_ip_address   : network.nodePublicIp,
                                         node_port         : config.NODE_PORT,
                                         request_guid      : data.request_guid,
+                                        message_guid     : Database.generateID(32),
                                         advertisement_list: advertisements
                                     }
                                 };
@@ -243,6 +256,7 @@ export class Peer {
                                         node_ip_address   : network.nodePublicIp,
                                         node_port         : config.NODE_PORT,
                                         request_guid      : data.request_guid,
+                                        message_guid     : Database.generateID(32),
                                         advertisement_list: advertisements
                                     }
                                 };
@@ -417,11 +431,15 @@ export class Peer {
     }
 
     _onAdvertisementPaymentRequest(data, ws) {
-        if (this._advertisementPaymentRequestQueue[data.message_guid]) {
+        if (this._advertisementPaymentRequestQueue[data.request_guid] || this._proxyAdvertisementPaymentRequestQueue[data.request_guid]) {
             return;
         }
 
-        this._advertisementPaymentRequestQueue[data.message_guid] = {timestamp: Date.now()};
+        this._proxyAdvertisementPaymentRequestQueue[data.request_guid] = {
+            timestamp: Date.now(),
+            ws
+        };
+
         this.propagateRequest('advertisement_payment_request', data, ws);
 
         console.log(`[peer] payment request received from node ${ws.nodeID}:`, data);
@@ -449,6 +467,7 @@ export class Peer {
                         const error   = advertisementRequestList.length === 0 ? 'creative_request_not_found' : 'advertisement_not_found';
                         const message = {
                             'message_guid' : Database.generateID(32),
+                            'request_guid' : data.request_guid,
                             'error'        : error,
                             'advertisement': {
                                 advertisement_guid        : data.advertisement_guid,
@@ -457,9 +476,6 @@ export class Peer {
                             }
                         };
 
-                        this._advertisementPaymentResponseQueue[message.message_guid] = {
-                            timestamp: Date.now()
-                        };
                         this.propagateRequest('advertisement_payment_response', message);
                     });
                     return;
@@ -474,6 +490,7 @@ export class Peer {
                         const normalizationRepository = database.getRepository('normalization');
                         const message                 = {
                             'message_guid'           : Database.generateID(32),
+                            'request_guid'           : data.request_guid,
                             advertisement_ledger_list: [
                                 {
                                     'protocol_transaction_id' : _.find(advertisementLedgerData.attributes, {attribute_type_guid: normalizationRepository.get('protocol_transaction_id')}).value,
@@ -489,9 +506,6 @@ export class Peer {
                             ]
                         };
 
-                        this._advertisementPaymentResponseQueue[message.message_guid] = {
-                            timestamp: Date.now()
-                        };
                         this.propagateRequest('advertisement_payment_response', message);
                         return;
                     }
@@ -513,29 +527,44 @@ export class Peer {
         });
     }
 
-    _onAdvertisementPaymentResponse(data, ws) {
-        if (this._advertisementPaymentRequestQueue[data.message_guid]) {
+    _onAdvertisementPaymentResponse(data) {
+        if (!data.message_guid || this._messageResponseQueue[data.message_guid]) {
             return;
         }
 
-        this._advertisementPaymentRequestQueue[data.message_guid] = {timestamp: Date.now()};
+        this._messageResponseQueue[data.message_guid] = {
+            timestamp: Date.now()
+        };
 
-        if (data.error && data.advertisement.device_id === this.deviceID) {
-            const consumerRepository = database.getRepository('consumer');
-            const where              = {
-                creative_request_guid: data.advertisement.advertisement_request_guid,
-                advertisement_guid   : data.advertisement.advertisement_guid,
-                payment_received_date: null
+        if (this._proxyAdvertisementPaymentRequestQueue[data.request_guid]) {
+            const ws      = this._proxyAdvertisementPaymentRequestQueue[data.request_guid].ws;
+            const payload = {
+                type   : 'advertisement_payment_response',
+                content: data
             };
-            if (data.error === 'creative_request_not_found') {
-                delete where['advertisement_guid'];
-            }
-            consumerRepository.deleteAdvertisement(where).then(_ => _);
-            return;
+            ws.send(JSON.stringify(payload));
         }
+        else if (this._advertisementPaymentRequestQueue[data.message_guid]) {
+            if (data.error && data.advertisement.device_id === this.deviceID) {
+                const consumerRepository = database.getRepository('consumer');
+                const where              = {
+                    creative_request_guid: data.advertisement.advertisement_request_guid,
+                    advertisement_guid   : data.advertisement.advertisement_guid,
+                    payment_received_date: null
+                };
+                if (data.error === 'creative_request_not_found') {
+                    delete where['advertisement_guid'];
+                }
+                consumerRepository.deleteAdvertisement(where).then(_ => _);
+                return;
+            }
 
-        this.propagateRequest('advertisement_payment_response', data, ws);
+            this.processPaymentSettlementMessage(data);
+        }
+    }
 
+
+    processPaymentSettlementMessage(data) {
         mutex.lock(['payment_response'], unlock => {
             const consumerRepository = database.getRepository('consumer');
             async.eachSeries(data.advertisement_ledger_list, (paymentData, callback) => {
@@ -551,6 +580,19 @@ export class Peer {
                 }).then(() => callback()).catch(() => callback());
             }, () => unlock());
         });
+    }
+
+    _onAdvertisementPaymentNew(data, ws) {
+        if (!data.message_guid || this._messageResponseQueue[data.message_guid]) {
+            return;
+        }
+
+        this._messageResponseQueue[data.message_guid] = {
+            timestamp: Date.now()
+        };
+
+        this.propagateRequest('advertisement_payment_new', data, ws);
+        this.processPaymentSettlementMessage(data);
     }
 
     processAdvertisementPayment() {
@@ -625,10 +667,7 @@ export class Peer {
                                         advertisement_ledger_list: data
                                     };
 
-                                    this._advertisementPaymentResponseQueue[data.message_guid] = {
-                                        timestamp: Date.now()
-                                    };
-                                    this.propagateRequest('advertisement_payment_response', message);
+                                    this.propagateRequest('advertisement_payment_new', message);
                                 })
                                 .then(() => {
                                     unlock();
@@ -683,7 +722,12 @@ export class Peer {
                 message_guid: Database.generateID(32)
             }
         };
-        const data    = JSON.stringify(payload);
+
+        this._advertisementPaymentRequestQueue[payload.content.request_guid] = {
+            timestamp: Date.now()
+        };
+
+        const data = JSON.stringify(payload);
         network.registeredClients.forEach(ws => {
             try {
                 ws.send(data);
@@ -739,6 +783,7 @@ export class Peer {
         eventBus.on('advertisement_sync_request', this._onAdvertisementSyncRequest.bind(this));
         eventBus.on('advertisement_payment_request', this._onAdvertisementPaymentRequest.bind(this));
         eventBus.on('advertisement_payment_response', this._onAdvertisementPaymentResponse.bind(this));
+        eventBus.on('advertisement_payment_new', this._onAdvertisementPaymentNew.bind(this));
         eventBus.on('advertisement_new', this._onNewAdvertisement.bind(this));
         eventBus.on('advertisement_sync', this._onSyncAdvertisement.bind(this));
 
@@ -785,6 +830,7 @@ export class Peer {
         eventBus.removeAllListeners('new_peer');
         eventBus.removeAllListeners('advertisement_request');
         eventBus.removeAllListeners('advertisement_sync');
+        eventBus.removeAllListeners('advertisement_payment_new');
         eventBus.removeAllListeners('advertisement_payment_request');
         eventBus.removeAllListeners('advertisement_payment_response');
         eventBus.removeAllListeners('peer_connection');
