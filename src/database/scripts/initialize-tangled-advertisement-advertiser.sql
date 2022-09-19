@@ -115,9 +115,10 @@ CREATE TABLE advertisement_request_log
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
 );
 CREATE INDEX idx_advertisement_request_log_advertisement_request ON advertisement_request_log ("advertisement_guid", "advertisement_request_guid");
+CREATE INDEX idx_advertisement_request_log_advertisement_request_guid_status ON advertisement_request_log ("advertisement_request_guid", "status");
 CREATE INDEX idx_advertisement_request_log_tangled_guid_consumer_status ON advertisement_request_log ("tangled_guid_consumer", "status");
 CREATE INDEX idx_advertisement_request_log_tangled_guid_device_status ON advertisement_request_log ("tangled_guid_device", "status");
-CREATE INDEX idx_advertisement_request_log_status_create_date ON advertisement_request_log ("status", "create_date");
+CREATE INDEX idx_advertisement_request_log_ip_address_consumer_status ON advertisement_request_log ("ip_address_consumer", "status");
 
 -- replace click log with umbrella table
 -- advertisement_engagement_log

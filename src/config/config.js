@@ -14,14 +14,15 @@ export const WEBSOCKET_PROTOCOL          = 'ws://';
 export const NETWORK_LONG_TIME_WAIT_MAX  = 3000;
 export const NETWORK_SHORT_TIME_WAIT_MAX = 1500;
 export const TRANSACTION_ADDRESS_VERSION = MODE_TEST ? 'lal' : '0a0';
+export const ADS_PAYMENT_BACKLOG_MAX     = 2000;
 export const TRANSACTION_OUTPUT_MAX      = 127;
 export const TRANSACTION_PROXY_FEE       = 1000;
 export const EXTERNAL_API_IP_CHECK       = 'https://api.millix.com/UGOKZVnF8QzVuFqqxgd2CIPrdR0m3x0XePIdL5ST/LfQSB646X28p6de9';
 export const ADS_TRANSACTION_IP_MAX      = 8; /* maximum number of ads paid to a single ip address */
-export const ADS_TRANSACTION_AMOUNT_MIN  = 1000;
-export const ADS_TRANSACTION_AMOUNT_MAX  = 999999999;
-export const ADS_PRUNE_AGE               = 86400; // 1 days old
-export const MILLIX_USD_VALUE            = 100000000 / 56; /*TODO: get this from an external api like fiatleak*/
+export const ADS_TRANSACTION_AMOUNT_MIN = 1000;
+export const ADS_TRANSACTION_AMOUNT_MAX = 999999999;
+export const ADS_PRUNE_AGE              = 86400; // 1 days old
+export const MILLIX_USD_VALUE           = 100000000 / 56; /*TODO: get this from an external api like fiatleak*/
 
 export const NODE_INITIAL_LIST         = [
     {
@@ -61,7 +62,7 @@ if (DATABASE_ENGINE === 'sqlite') {
     DATABASE_CONNECTION.FILENAME_ADVERTISER_ADVERTISEMENT = 'tangled-advertisement-advertiser.sqlite';
     DATABASE_CONNECTION.FILENAME_CONSUMER_ADVERTISEMENT   = 'tangled-advertisement-consumer.sqlite';
     DATABASE_CONNECTION.FILENAME_MILLIX_NODE              = 'millix.sqlite';
-    DATABASE_CONNECTION.SCHEMA_VERSION                    = '10';
+    DATABASE_CONNECTION.SCHEMA_VERSION                    = '11';
 }
 
 export default {
@@ -80,6 +81,7 @@ export default {
     TRANSACTION_ADDRESS_VERSION,
     NETWORK_LONG_TIME_WAIT_MAX,
     ADS_TRANSACTION_AMOUNT_MIN,
+    ADS_PAYMENT_BACKLOG_MAX,
     TRANSACTION_OUTPUT_MAX,
     EXTERNAL_API_IP_CHECK,
     TRANSACTION_PROXY_FEE,

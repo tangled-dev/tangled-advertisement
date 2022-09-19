@@ -5,8 +5,10 @@ import _ from 'lodash';
 
 export default class Advertiser {
     constructor(database) {
-        this.database                = database;
-        this.normalizationRepository = null;
+        this.database                   = database;
+        this.normalizationRepository    = null;
+        this.advertismentAttributeCache = {};
+        this.advertisementGUIDCache     = new Set();
     }
 
     setNormalizationRepository(repository) {
@@ -87,6 +89,13 @@ export default class Advertiser {
                     if (err) {
                         return reject(err);
                     }
+
+                    if (advertisement.status === 1) {
+                        this.advertismentAttributeCache.add(advertisement.advertisement_guid);
+                    }
+                    else {
+                        this.advertismentAttributeCache.delete(advertisement.advertisement_guid);
+                    }
                     resolve();
                 });
             });
@@ -166,47 +175,7 @@ export default class Advertiser {
                     return reject(err);
                 }
 
-                if (data.length === 0) {
-                    return resolve(data);
-                }
-                const advertisements = {};
-                data.forEach(advertisement => {
-                    advertisements[advertisement.advertisement_guid] = {
-                        advertisement_guid      : advertisement.advertisement_guid,
-                        advertisement_type      : this.normalizationRepository.getType(advertisement.advertisement_type_guid),
-                        advertisement_category  : this.normalizationRepository.getType(advertisement.advertisement_category_guid),
-                        advertisement_name      : advertisement.advertisement_name,
-                        advertisement_url       : advertisement.advertisement_url,
-                        protocol_address_funding: advertisement.protocol_address_funding,
-                        budget_daily_usd        : advertisement.budget_daily_usd,
-                        budget_daily_mlx        : advertisement.budget_daily_mlx,
-                        bid_impression_usd      : advertisement.bid_impression_usd,
-                        bid_impression_mlx      : advertisement.bid_impression_mlx,
-                        expiration              : advertisement.expiration,
-                        attributes              : []
-                    };
-                });
-
-                const advertisementGUIDs = _.keys(advertisements);
-                this.database.all(`SELECT *
-                                   FROM advertisement_advertiser.advertisement_attribute
-                                   WHERE advertisement_guid IN (${advertisementGUIDs.map(() => '?').join(',')})`, advertisementGUIDs, (err, data) => {
-                    if (err) {
-                        return reject(err);
-                    }
-
-                    data.forEach(attribute => {
-                        advertisements[attribute.advertisement_guid].attributes.push({
-                            attribute_guid: attribute.advertisement_attribute_guid,
-                            attribute_type: this.normalizationRepository.getType(attribute.attribute_type_guid),
-                            object        : this.normalizationRepository.getType(attribute.object_guid),
-                            value         : attribute.value
-                        });
-                    });
-
-                    resolve(_.values(advertisements));
-                });
-
+                this._buildConsumerAdvertisementList(data).then(advertisementList => resolve(advertisementList)).catch(e => reject(e));
             });
         });
     }
@@ -224,48 +193,7 @@ export default class Advertiser {
                     return reject(err);
                 }
 
-                if (data.length === 0) {
-                    return resolve(data);
-                }
-                const advertisements = {};
-                data.forEach(advertisement => {
-                    advertisements[advertisement.advertisement_guid] = {
-                        advertisement_request_guid: advertisement.advertisement_request_guid,
-                        advertisement_guid        : advertisement.advertisement_guid,
-                        advertisement_type        : this.normalizationRepository.getType(advertisement.advertisement_type_guid),
-                        advertisement_category    : this.normalizationRepository.getType(advertisement.advertisement_category_guid),
-                        advertisement_name        : advertisement.advertisement_name,
-                        advertisement_url         : advertisement.advertisement_url,
-                        protocol_address_funding  : advertisement.protocol_address_funding,
-                        budget_daily_usd          : advertisement.budget_daily_usd,
-                        budget_daily_mlx          : advertisement.budget_daily_mlx,
-                        bid_impression_usd        : advertisement.bid_impression_usd,
-                        bid_impression_mlx        : advertisement.bid_impression_mlx,
-                        expiration                : advertisement.expiration,
-                        attributes                : []
-                    };
-                });
-
-                const advertisementGUIDs = _.keys(advertisements);
-                this.database.all(`SELECT *
-                                   FROM advertisement_advertiser.advertisement_attribute
-                                   WHERE advertisement_guid IN (${advertisementGUIDs.map(() => '?').join(',')})`, advertisementGUIDs, (err, data) => {
-                    if (err) {
-                        return reject(err);
-                    }
-
-                    data.forEach(attribute => {
-                        advertisements[attribute.advertisement_guid].attributes.push({
-                            attribute_guid: attribute.advertisement_attribute_guid,
-                            attribute_type: this.normalizationRepository.getType(attribute.attribute_type_guid),
-                            object        : this.normalizationRepository.getType(attribute.object_guid),
-                            value         : attribute.value
-                        });
-                    });
-
-                    resolve(_.values(advertisements));
-                });
-
+                this._buildConsumerAdvertisementList(data).then(advertisementList => resolve(advertisementList)).catch(e => reject(e));
             });
         });
     }
@@ -354,20 +282,25 @@ export default class Advertiser {
         });
 
         return this.database.runBatchAsync(statements)
-                   .then(() => ({
-                       advertisement_guid      : guid,
-                       advertisement_type      : type,
-                       advertisement_category  : category,
-                       advertisement_name      : name,
-                       advertisement_url       : url,
-                       protocol_address_funding: fundingAddress,
-                       budget_daily_usd        : budgetUSD,
-                       budget_daily_mlx        : budgetMLX,
-                       bid_impression_usd      : bidImpressionUSD,
-                       bid_impression_mlx      : bidImpressionMLX,
-                       expiration,
-                       attributes
-                   }));
+                   .then(() => {
+
+                       this.advertisementGUIDCache.add(guid);
+
+                       return {
+                           advertisement_guid      : guid,
+                           advertisement_type      : type,
+                           advertisement_category  : category,
+                           advertisement_name      : name,
+                           advertisement_url       : url,
+                           protocol_address_funding: fundingAddress,
+                           budget_daily_usd        : budgetUSD,
+                           budget_daily_mlx        : budgetMLX,
+                           bid_impression_usd      : bidImpressionUSD,
+                           bid_impression_mlx      : bidImpressionMLX,
+                           expiration,
+                           attributes
+                       };
+                   });
     }
 
     logAdvertisementClick(guid, requestGUID, consumerGUID, protocolAddressKeyIdentifier, ipAddress, expiration) {
@@ -480,6 +413,21 @@ export default class Advertiser {
                       parameters
                   } = Database.buildQuery('SELECT * FROM advertisement_advertiser.advertisement', where);
             this.database.get(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve(data);
+            });
+        });
+    }
+
+    listAdvertisement(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_advertiser.advertisement', where);
+            this.database.all(sql, parameters, (err, data) => {
                 if (err) {
                     return reject(err);
                 }
@@ -620,27 +568,50 @@ export default class Advertiser {
         const mlxCurrencyGUID     = this.normalizationRepository.get('mlx');
         const usdAmount           = (mlxAmount / config.MILLIX_USD_VALUE).toFixed(2);
 
+        const sql    = `INSERT INTO advertisement_advertiser.advertisement_ledger
+                        (ledger_guid,
+                         advertisement_guid,
+                         advertisement_request_guid,
+                         transaction_type_guid,
+                         tx_address_deposit_vout_md5,
+                         currency_guid,
+                         withdrawal,
+                         price_usd)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+        `;
+        const params = [
+            ledgerGUID,
+            advertisementGUID,
+            requestGUID,
+            transactionTypeGUID,
+            null,
+            mlxCurrencyGUID,
+            mlxAmount,
+            usdAmount
+        ];
+
+        if (attributes.length === 0) {
+            return new Promise((resolve, reject) => {
+                this.database.run(sql, params, (err) => {
+                    if (err) {
+                        return reject(err);
+                    }
+
+                    resolve({
+                        ledger_guid               : ledgerGUID,
+                        ledger_guid_pair          : ledgerPairGUID,
+                        advertisement_guid        : advertisementGUID,
+                        advertisement_request_guid: requestGUID,
+                        attributes
+                    });
+                });
+            });
+        }
+
         const statements = [
             [ // payment sent to consumer
-                `INSERT INTO advertisement_advertiser.advertisement_ledger
-                 (ledger_guid,
-                  advertisement_guid,
-                  advertisement_request_guid,
-                  transaction_type_guid,
-                  tx_address_deposit_vout_md5,
-                  currency_guid,
-                  withdrawal,
-                  price_usd)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?);
-                `,
-                ledgerGUID,
-                advertisementGUID,
-                requestGUID,
-                transactionTypeGUID,
-                null,
-                mlxCurrencyGUID,
-                mlxAmount,
-                usdAmount
+                sql,
+                ...params
             ]
         ];
 
@@ -833,6 +804,19 @@ export default class Advertiser {
         });
     }
 
+    countPendingPayment() {
+        return new Promise((resolve, reject) => {
+            this.database.get(`SELECT count(1) as total
+                               FROM advertisement_advertiser.advertisement_ledger
+                               WHERE tx_address_deposit_vout_md5 IS NULL`, [], (err, data) => {
+                if (err) {
+                    return reject();
+                }
+                return resolve(data.total);
+            });
+        });
+    }
+
     resetAd(where) {
         return new Promise((resolve, reject) => {
             const {
@@ -886,6 +870,107 @@ export default class Advertiser {
 
                     resolve(data.ad_count);
                 });
+        });
+    }
+
+    getAdvertisementAttributes(where = {}) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_advertiser.advertisement_attribute', where);
+            this.database.all(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve(data);
+            });
+        });
+    }
+
+    cacheAdvertisementGUID(data) {
+        data.forEach(advertisement => {
+            this.advertisementGUIDCache.add(advertisement.advertisement_guid);
+        });
+    }
+
+    getAdvertisementGUIDCached() {
+        return this.advertisementGUIDCache;
+    }
+
+    cacheAdvertisementAttributes(data) {
+        data.forEach(attribute => {
+            const attributeValue = {
+                attribute_guid: attribute.advertisement_attribute_guid,
+                attribute_type: this.normalizationRepository.getType(attribute.attribute_type_guid),
+                object        : this.normalizationRepository.getType(attribute.object_guid),
+                value         : attribute.value
+            };
+
+            if (!this.advertismentAttributeCache[attribute.advertisement_guid]) {
+                this.advertismentAttributeCache[attribute.advertisement_guid] = [attributeValue];
+            }
+            else {
+                this.advertismentAttributeCache[attribute.advertisement_guid].push(attributeValue);
+            }
+        });
+    }
+
+    _buildConsumerAdvertisementList(data) {
+        return new Promise((resolve, reject) => {
+
+            if (data.length === 0) {
+                return resolve(data);
+            }
+
+            const advertisements = {};
+            data.forEach(advertisement => {
+                advertisements[advertisement.advertisement_guid] = {
+                    advertisement_request_guid: advertisement.advertisement_request_guid,
+                    advertisement_guid        : advertisement.advertisement_guid,
+                    advertisement_type        : this.normalizationRepository.getType(advertisement.advertisement_type_guid),
+                    advertisement_category    : this.normalizationRepository.getType(advertisement.advertisement_category_guid),
+                    advertisement_name        : advertisement.advertisement_name,
+                    advertisement_url         : advertisement.advertisement_url,
+                    protocol_address_funding  : advertisement.protocol_address_funding,
+                    budget_daily_usd          : advertisement.budget_daily_usd,
+                    budget_daily_mlx          : advertisement.budget_daily_mlx,
+                    bid_impression_usd        : advertisement.bid_impression_usd,
+                    bid_impression_mlx        : advertisement.bid_impression_mlx,
+                    expiration                : advertisement.expiration,
+                    attributes                : []
+                };
+            });
+
+            const advertisementGUIDs        = _.keys(advertisements);
+            const advertisementGUIDToRemove = [];
+            _.each(advertisementGUIDs, advertisementGUID => {
+                if (this.advertismentAttributeCache[advertisementGUID]) {
+                    advertisements[advertisementGUID].attributes.push(...this.advertismentAttributeCache[advertisementGUID]);
+                    advertisementGUIDToRemove.push(advertisementGUID);
+                }
+            });
+
+            _.pull(advertisementGUIDs, ...advertisementGUIDToRemove);
+
+            if (advertisementGUIDs.length === 0) {
+                resolve(_.values(advertisements));
+                return;
+            }
+
+            console.log('[database] warn: loading missing advertisement attributes. total: ' + advertisementGUIDs.length + ' current cache size: ' + _.keys(this.advertismentAttributeCache).length);
+
+            this.database.all(`SELECT *
+                               FROM advertisement_advertiser.advertisement_attribute
+                               WHERE advertisement_guid IN (${advertisementGUIDs.map(() => '?').join(',')})`, advertisementGUIDs, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+
+                _.each(advertisementGUIDs, advertisementGUID => advertisements[advertisementGUID].attributes.push(...this.advertismentAttributeCache[advertisementGUID]));
+
+                resolve(_.values(advertisements));
+            });
         });
     }
 }

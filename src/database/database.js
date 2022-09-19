@@ -99,7 +99,8 @@ export class Database {
                 else if (where[key] === null) {
                     if (key.endsWith('!')) {
                         sql += `${key.substring(0, key.length - 1)} is not NULL`;
-                    } else {
+                    }
+                    else {
                         sql += `${key} is NULL`;
                     }
                     return;
@@ -194,7 +195,8 @@ export class Database {
                 else if (where[key] === null) {
                     if (key.endsWith('!')) {
                         sql += `${key.substring(0, key.length - 1)} is not NULL`;
-                    } else {
+                    }
+                    else {
                         sql += `${key} is NULL`;
                     }
                     return;
@@ -408,6 +410,15 @@ export class Database {
         });
     }
 
+    _loadCaches() {
+        const advertiserRepository = this.getRepository('advertiser');
+        return advertiserRepository.getAdvertisementAttributes()
+                                   .then(data => {
+                                       advertiserRepository.cacheAdvertisementAttributes(data);
+                                       return advertiserRepository.listAdvertisement();
+                                   }).then(data => advertiserRepository.cacheAdvertisementGUID(data));
+    }
+
     _initializeTables() {
         this.repositories['normalization'] = new Normalization(this.database);
         this.repositories['api']           = new API(this.database);
@@ -543,7 +554,8 @@ export class Database {
                        .then(() => this.initializeTangledAdvertisementConsumer())
                        .then(() => this.initializeMillix())
                        .then(() => this._migrateTables())
-                       .then(() => this._initializeTables());
+                       .then(() => this._initializeTables())
+                       .then(() => this._loadCaches());
         }
         return Promise.resolve();
     }
