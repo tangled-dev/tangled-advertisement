@@ -63,7 +63,7 @@ export class Peer {
     }
 
     _onNewAdvertisement(data) {
-        if (!data.message_guid || this._messageResponseQueue[data.message_guid]) {
+        if (data.message_guid && this._messageResponseQueue[data.message_guid]) {
             return;
         }
 
@@ -101,7 +101,7 @@ export class Peer {
     }
 
     _onSyncAdvertisement(data) {
-        if (!data.message_guid || this._messageResponseQueue[data.message_guid]) {
+        if (data.message_guid && this._messageResponseQueue[data.message_guid]) {
             return;
         }
 
@@ -161,7 +161,9 @@ export class Peer {
             timestamp: Date.now(),
             ws
         };
-        this._throttleAdvertisementSyncByNode[data.node_id]  = Date.now();
+        this._throttleAdvertisementSyncByNode[data.node_id]  = {
+            timestamp: Date.now()
+        };
 
 
         this.propagateRequest('advertisement_sync_request', data, ws);
@@ -208,7 +210,9 @@ export class Peer {
             timestamp: Date.now(),
             ws
         };
-        this._throttleAdvertisementRequestByNode[data.device_id] = this._throttleAdvertisementRequestByNode[data.node_id] = Date.now();
+        this._throttleAdvertisementRequestByNode[data.device_id] = this._throttleAdvertisementRequestByNode[data.node_id] = {
+            timestamp: Date.now()
+        };
 
         this.propagateRequest('advertisement_request', data, ws);
 
@@ -507,14 +511,11 @@ export class Peer {
                         const error   = !advertisementRequest ? 'creative_request_not_found' : 'advertisement_not_found';
                         this.stats[error] += 1;
                         const message = {
-                            'message_guid' : Database.generateID(32),
-                            'request_guid' : data.request_guid,
-                            'error'        : error,
-                            'advertisement': {
-                                advertisement_guid        : data.advertisement_guid,
-                                advertisement_request_guid: data.request_guid,
-                                device_id                 : data.device_id
-                            }
+                            message_guid      : Database.generateID(32),
+                            advertisement_guid: data.advertisement_guid,
+                            request_guid      : data.request_guid,
+                            device_id         : data.device_id,
+                            error
                         };
 
                         this.propagateRequest('advertisement_payment_response', message);
@@ -531,14 +532,14 @@ export class Peer {
                         this.stats['advertisement_payment_resend'] += 1;
                         const normalizationRepository = database.getRepository('normalization');
                         const message                 = {
-                            'message_guid'              : Database.generateID(32),
-                            'request_guid'              : data.request_guid,
-                            'advertisement_request_guid': data.advertisement_guid,
-                            advertisement_ledger_list   : [
+                            message_guid             : Database.generateID(32),
+                            request_guid             : data.request_guid,
+                            advertisement_guid       : data.advertisement_guid,
+                            advertisement_ledger_list: [
                                 {
-                                    'protocol_transaction_id' : _.find(advertisementLedgerData.attributes, {attribute_type_guid: normalizationRepository.get('protocol_transaction_id')}).value,
-                                    'protocol_output_position': parseInt(_.find(advertisementLedgerData.attributes, {attribute_type_guid: normalizationRepository.get('protocol_output_position')}).value),
-                                    'deposit'                 : advertisementLedgerData.withdrawal,
+                                    protocol_transaction_id : _.find(advertisementLedgerData.attributes, {attribute_type_guid: normalizationRepository.get('protocol_transaction_id')}).value,
+                                    protocol_output_position: parseInt(_.find(advertisementLedgerData.attributes, {attribute_type_guid: normalizationRepository.get('protocol_output_position')}).value),
+                                    deposit                 : advertisementLedgerData.withdrawal,
                                     ..._.pick(advertisementLedgerData, [
                                         'advertisement_request_guid',
                                         'advertisement_guid',
@@ -590,9 +591,8 @@ export class Peer {
     _onAdvertisementPaymentResponse(data) {
         const key = `${data.request_guid}_${data.advertisement_guid}`;
 
-        if (!data.message_guid ||
-            this._messageResponseQueue[data.message_guid] ||
-            !this._proxyAdvertisementPaymentRequestQueue[key] ||
+        if (data.message_guid && this._messageResponseQueue[data.message_guid] ||
+            !this._proxyAdvertisementPaymentRequestQueue[key] &&
             !this._advertisementPaymentRequestQueue[key]) {
             return;
         }
@@ -612,11 +612,11 @@ export class Peer {
             ws.send(JSON.stringify(payload));
         }
         else if (this._advertisementPaymentRequestQueue[key]) {
-            if (data.error && data.advertisement.device_id === this.deviceID) {
+            if (data.error && data.device_id === this.deviceID) {
                 const consumerRepository = database.getRepository('consumer');
                 const where              = {
-                    creative_request_guid: data.advertisement.advertisement_request_guid,
-                    advertisement_guid   : data.advertisement.advertisement_guid,
+                    creative_request_guid: data.request_guid,
+                    advertisement_guid   : data.advertisement_guid,
                     payment_received_date: null
                 };
                 if (data.error === 'creative_request_not_found') {
