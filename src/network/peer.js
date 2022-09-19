@@ -30,15 +30,15 @@ export class Peer {
         this.paymentBacklogSize                     = 0;
         this.isProcessingPayment                    = false;
         this.stats                                  = {
-            'advertisement_request'                : 0,
-            'advertisement_request_sync'           : 0,
-            'advertisement_payment_request'        : 0,
-            'advertisement_payment_response'       : 0,
-            'creative_request_not_found'           : 0,
-            'advertisement_not_found'              : 0,
-            'advertisement_payment_created'        : 0,
-            'advertisement_payment_resend'         : 0,
-            'advertisement_payment_not_created'    : 0
+            'advertisement_request'            : 0,
+            'advertisement_request_sync'       : 0,
+            'advertisement_payment_request'    : 0,
+            'advertisement_payment_response'   : 0,
+            'creative_request_not_found'       : 0,
+            'advertisement_not_found'          : 0,
+            'advertisement_payment_created'    : 0,
+            'advertisement_payment_resend'     : 0,
+            'advertisement_payment_not_created': 0
         };
     }
 
@@ -389,6 +389,7 @@ export class Peer {
             type   : 'advertisement_sync_request',
             content: {
                 node_id     : this.nodeID,
+                timestamp   : Date.now(),
                 request_guid: requestID
             }
         };
@@ -419,6 +420,7 @@ export class Peer {
                 protocol_address_key_identifier: this.protocolAddressKeyIdentifier,
                 device_id                      : this.deviceID,
                 request_guid                   : requestID,
+                timestamp                      : Date.now(),
                 advertisement                  : {
                     type: 'all'
                 }
@@ -734,6 +736,7 @@ export class Peer {
                             .then(data => {
                                 const message = {
                                     message_guid             : Database.generateID(32),
+                                    timestamp                : Date.now(),
                                     advertisement_ledger_list: data
                                 };
 
@@ -792,6 +795,7 @@ export class Peer {
                     'creative_request_guid'
                 ]), (_, k) => k === 'creative_request_guid' ? 'request_guid' : k),
                 device_id   : this.deviceID,
+                timestamp   : Date.now(),
                 message_guid: Database.generateID(32)
             }
         };
