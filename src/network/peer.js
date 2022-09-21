@@ -23,9 +23,7 @@ export class Peer {
         this._advertisementSyncQueue                = {};
         this._ipAddressesThrottled                  = new Set();
         this._ipAddressesValidation                 = {};
-        this._messageResponseQueue                  = {};
-        this._throttleAdvertisementRequestByNode    = {};
-        this._throttleAdvertisementSyncByNode       = {};
+        this._messageQueue                          = {};
         this.protocolAddressKeyIdentifier           = null;
         this.paymentBacklogSize                     = 0;
         this.isProcessingPayment                    = false;
@@ -43,11 +41,14 @@ export class Peer {
     }
 
     _pruneMessageQueue(queue) {
+        const objectsToRemove = [];
         _.each(queue, (value, key) => {
-            if (value?.timestamp < Date.now() - 60000) {
-                delete queue[key];
+            if (value?.timestamp < Date.now() - 10000) {
+                objectsToRemove.push(key);
             }
         });
+
+        objectsToRemove.forEach(key => delete queue[key]);
     }
 
     clearMessageQueues() {
@@ -55,31 +56,21 @@ export class Peer {
         this._pruneMessageQueue(this._proxyAdvertisementSyncQueue);
         this._pruneMessageQueue(this._proxyAdvertisementPaymentRequestQueue);
         this._pruneMessageQueue(this._advertisementPaymentRequestQueue);
-        this._pruneMessageQueue(this._throttleAdvertisementRequestByNode);
-        this._pruneMessageQueue(this._throttleAdvertisementSyncByNode);
         this._pruneMessageQueue(this._advertisementRequestQueue);
-        this._pruneMessageQueue(this._messageResponseQueue);
+        this._pruneMessageQueue(this._messageQueue);
         this._pruneMessageQueue(this._advertisementSyncQueue);
     }
 
     _onNewAdvertisement(data) {
-        if (data.message_guid && this._messageResponseQueue[data.message_guid]) {
+        if (this.shouldBlockMessage(data, true)) {
             return;
         }
 
-        this._messageResponseQueue[data.message_guid] = {
+        this._messageQueue[data.message_guid] = {
             timestamp: Date.now()
         };
 
-        if (this._proxyAdvertisementRequestQueue[data.request_guid]) {
-            const ws      = this._proxyAdvertisementRequestQueue[data.request_guid].ws;
-            const payload = {
-                type   : 'advertisement_new',
-                content: data
-            };
-            ws.send(JSON.stringify(payload));
-        }
-        else if (this._advertisementRequestQueue[data.request_guid]) {
+        if (this._advertisementRequestQueue[data.request_guid]) {
             const {
                       advertisement_list: advertisements,
                       node_id           : nodeID,
@@ -98,26 +89,26 @@ export class Peer {
                                   .catch(() => callback());
             });
         }
-    }
-
-    _onSyncAdvertisement(data) {
-        if (data.message_guid && this._messageResponseQueue[data.message_guid]) {
-            return;
-        }
-
-        this._messageResponseQueue[data.message_guid] = {
-            timestamp: Date.now()
-        };
-
-        if (this._proxyAdvertisementSyncQueue[data.request_guid]) {
-            const ws      = this._proxyAdvertisementSyncQueue[data.request_guid].ws;
+        else if (this._proxyAdvertisementRequestQueue[data.request_guid]) {
+            const ws      = this._proxyAdvertisementRequestQueue[data.request_guid].ws;
             const payload = {
-                type   : 'advertisement_sync',
+                type   : 'advertisement_new',
                 content: data
             };
             ws.send(JSON.stringify(payload));
         }
-        else if (this._advertisementSyncQueue[data.request_guid]) {
+    }
+
+    _onSyncAdvertisement(data) {
+        if (this.shouldBlockMessage(data, true)) {
+            return;
+        }
+
+        this._messageQueue[data.message_guid] = {
+            timestamp: Date.now()
+        };
+
+        if (this._advertisementSyncQueue[data.request_guid]) {
             const {
                       advertisement_list: advertisements,
                       node_id           : nodeID,
@@ -135,6 +126,14 @@ export class Peer {
                                   .catch(() => callback());
             });
         }
+        else if (this._proxyAdvertisementSyncQueue[data.request_guid]) {
+            const ws      = this._proxyAdvertisementSyncQueue[data.request_guid].ws;
+            const payload = {
+                type   : 'advertisement_sync',
+                content: data
+            };
+            ws.send(JSON.stringify(payload));
+        }
     }
 
     _onNewPeer(peer, ws) {
@@ -148,10 +147,9 @@ export class Peer {
     }
 
     _onAdvertisementSyncRequest(data, ws) {
-        if (!data.node_id || !data.request_guid ||
-            this._throttleAdvertisementSyncByNode[data.node_id] ||
-            this._proxyAdvertisementSyncQueue[data.request_guid] ||
-            this._advertisementSyncQueue[data.request_guid]) {
+        data.message_guid = data.request_guid;
+        if (!data.node_id ||
+            this.shouldBlockMessage(data)) {
             return;
         }
 
@@ -161,7 +159,8 @@ export class Peer {
             timestamp: Date.now(),
             ws
         };
-        this._throttleAdvertisementSyncByNode[data.node_id]  = {
+
+        this._messageQueue[data.message_guid] = {
             timestamp: Date.now()
         };
 
@@ -184,6 +183,7 @@ export class Peer {
                                         node_port         : config.NODE_PORT,
                                         request_guid      : data.request_guid,
                                         message_guid      : Database.generateID(32),
+                                        timestamp         : Date.now(),
                                         advertisement_list: advertisements
                                     }
                                 };
@@ -192,13 +192,11 @@ export class Peer {
     }
 
     _onAdvertisementRequest(data, ws) {
+        data.message_guid = data.request_guid;
         if (this._ipAddressesThrottled.has(data.node_ip_address) ||
             !data.protocol_address_key_identifier ||
             !data.device_id ||
-            this._proxyAdvertisementRequestQueue[data.request_guid] ||
-            this._advertisementRequestQueue[data.request_guid] ||
-            this._throttleAdvertisementRequestByNode[data.device_id] ||
-            this._throttleAdvertisementRequestByNode[data.node_id] ||
+            this.shouldBlockMessage(data) ||
             config.MODE_TEST === false && !data.protocol_address_key_identifier.startsWith('1') ||
             config.MODE_TEST === true && data.protocol_address_key_identifier.startsWith('1')) {
             return;
@@ -206,11 +204,12 @@ export class Peer {
 
         this.stats['advertisement_request'] += 1;
 
-        this._proxyAdvertisementRequestQueue[data.request_guid]  = {
+        this._proxyAdvertisementRequestQueue[data.request_guid] = {
             timestamp: Date.now(),
             ws
         };
-        this._throttleAdvertisementRequestByNode[data.device_id] = this._throttleAdvertisementRequestByNode[data.node_id] = {
+
+        this._messageQueue[data.message_guid] = {
             timestamp: Date.now()
         };
 
@@ -240,25 +239,30 @@ export class Peer {
                                     }
 
                                     request.get(
-                                        `${config.EXTERNAL_API_IP_CHECK}?p1=${data.node_ip_address}`,
+                                        `${config.EXTERNAL_API_IP_CHECK}?p1=${data.node_ip_address}&p2=${data.protocol_address_key_identifier}`,
                                         (error, response, body) => {
                                             if (!error && response.statusCode === 200) {
-                                                const data                                        = JSON.parse(body);
-                                                const isValid                                     = !!data.is_valid;
-                                                this._ipAddressesValidation[data.node_ip_address] = isValid;
-                                                resolve([
-                                                    advertisements,
-                                                    adCount,
-                                                    isValid
-                                                ]);
+                                                try {
+                                                    const data                                        = JSON.parse(body);
+                                                    const isValid                                     = !!data.is_valid;
+                                                    this._ipAddressesValidation[data.node_ip_address] = isValid;
+                                                    return resolve([
+                                                        advertisements,
+                                                        adCount,
+                                                        isValid
+                                                    ]);
+                                                }
+                                                catch (e) {
+                                                    console.log('[peer] error', e);
+                                                }
                                             }
-                                            else {
-                                                resolve([
-                                                    advertisements,
-                                                    adCount,
-                                                    true
-                                                ]);
-                                            }
+
+                                            resolve([
+                                                advertisements,
+                                                adCount,
+                                                true
+                                            ]);
+
                                         }
                                     );
                                 }));
@@ -291,6 +295,7 @@ export class Peer {
                                         node_port         : config.NODE_PORT,
                                         request_guid      : data.request_guid,
                                         message_guid      : Database.generateID(32),
+                                        timestamp         : Date.now(),
                                         advertisement_list: advertisements
                                     }
                                 };
@@ -386,9 +391,11 @@ export class Peer {
     // sync active advertisement to the current consumer
     requestAdvertisementSync() {
         const requestID                         = Database.generateID(32);
-        this._advertisementSyncQueue[requestID] = {
+        const cachedData                        = {
             timestamp: Date.now()
         };
+        this._advertisementSyncQueue[requestID] = cachedData;
+        this._messageQueue[requestID]           = cachedData;
         const payload                           = {
             type   : 'advertisement_sync_request',
             content: {
@@ -413,9 +420,11 @@ export class Peer {
 
     requestAdvertisement() {
         const requestID                            = Database.generateID(32);
-        this._advertisementRequestQueue[requestID] = {
+        const cachedData                           = {
             timestamp: Date.now()
         };
+        this._advertisementRequestQueue[requestID] = cachedData;
+        this._messageQueue[requestID]              = cachedData;
         const payload                              = {
             type   : 'advertisement_request',
             content: {
@@ -471,14 +480,17 @@ export class Peer {
         const advertiserRepository = database.getRepository('advertiser');
         if (!data.advertisement_guid ||
             !data.request_guid ||
-            this._advertisementPaymentRequestQueue[key] ||
-            this._proxyAdvertisementPaymentRequestQueue[key]) {
+            this.shouldBlockMessage(data)) {
             return;
         }
 
         this._proxyAdvertisementPaymentRequestQueue[key] = {
             timestamp: Date.now(),
             ws
+        };
+
+        this._messageQueue[data.message_guid] = {
+            timestamp: Date.now()
         };
 
         this.propagateRequest('advertisement_payment_request', data, ws);
@@ -515,6 +527,10 @@ export class Peer {
                             advertisement_guid: data.advertisement_guid,
                             request_guid      : data.request_guid,
                             device_id         : data.device_id,
+                            timestamp         : Date.now(),
+                            advertisement     : {
+                                device_id: data.device_id
+                            },
                             error
                         };
 
@@ -534,6 +550,7 @@ export class Peer {
                         const message                 = {
                             message_guid             : Database.generateID(32),
                             request_guid             : data.request_guid,
+                            timestamp                : Date.now(),
                             advertisement_guid       : data.advertisement_guid,
                             advertisement_ledger_list: [
                                 {
@@ -591,7 +608,7 @@ export class Peer {
     _onAdvertisementPaymentResponse(data) {
         const key = `${data.request_guid}_${data.advertisement_guid}`;
 
-        if (data.message_guid && this._messageResponseQueue[data.message_guid] ||
+        if (this.shouldBlockMessage(data, true) ||
             !this._proxyAdvertisementPaymentRequestQueue[key] &&
             !this._advertisementPaymentRequestQueue[key]) {
             return;
@@ -599,19 +616,11 @@ export class Peer {
 
         this.stats['advertisement_payment_response'] += 1;
 
-        this._messageResponseQueue[data.message_guid] = {
+        this._messageQueue[data.message_guid] = {
             timestamp: Date.now()
         };
 
-        if (this._proxyAdvertisementPaymentRequestQueue[key]) {
-            const ws      = this._proxyAdvertisementPaymentRequestQueue[key].ws;
-            const payload = {
-                type   : 'advertisement_payment_response',
-                content: data
-            };
-            ws.send(JSON.stringify(payload));
-        }
-        else if (this._advertisementPaymentRequestQueue[key]) {
+        if (this._advertisementPaymentRequestQueue[key]) {
             if (data.error && data.device_id === this.deviceID) {
                 const consumerRepository = database.getRepository('consumer');
                 const where              = {
@@ -627,6 +636,14 @@ export class Peer {
             }
 
             this.processPaymentSettlementMessage(data);
+        }
+        else if (this._proxyAdvertisementPaymentRequestQueue[key]) {
+            const ws      = this._proxyAdvertisementPaymentRequestQueue[key].ws;
+            const payload = {
+                type   : 'advertisement_payment_response',
+                content: data
+            };
+            ws.send(JSON.stringify(payload));
         }
     }
 
@@ -650,11 +667,11 @@ export class Peer {
     }
 
     _onAdvertisementPaymentNew(data, ws) {
-        if (!data.message_guid || this._messageResponseQueue[data.message_guid]) {
+        if (this.shouldBlockMessage(data)) {
             return;
         }
 
-        this._messageResponseQueue[data.message_guid] = {
+        this._messageQueue[data.message_guid] = {
             timestamp: Date.now()
         };
 
@@ -800,9 +817,13 @@ export class Peer {
             }
         };
 
-        this._advertisementPaymentRequestQueue[`${payload.content.request_guid}_${payload.content.advertisement_guid}`] = {
+        const cachedData = {
             timestamp: Date.now()
         };
+
+        this._advertisementPaymentRequestQueue[`${payload.content.request_guid}_${payload.content.advertisement_guid}`] = cachedData;
+
+        this._messageQueue[payload.content.message_guid] = cachedData;
 
         const data = JSON.stringify(payload);
         network.registeredClients.forEach(ws => {
@@ -853,6 +874,10 @@ export class Peer {
         });
     }
 
+    shouldBlockMessage(data, skipTimestampCheck = false) {
+        return !data.message_guid || this._messageQueue[data.message_guid] || !skipTimestampCheck && (!data.timestamp || data.timestamp < Date.now() - 60000);
+    }
+
     showStats() {
         this.stats['payment_backlog_size'] = this.paymentBacklogSize;
         console.log('[stats] current stats', this.stats);
@@ -883,7 +908,7 @@ export class Peer {
         task.scheduleTask('advertisement-queue-prune', () => this.pruneConsumerAdvertisementQueue(), 30000);
         task.scheduleTask('advertisement-queue-process', () => this.processAdvertisementQueue(), 15000, true);
         task.scheduleTask('node-update-throttled-ip-address', () => this.updateThrottledIpAddress(), 60000);
-        task.scheduleTask('node-prune-message', () => this.clearMessageQueues(), 60000);
+        task.scheduleTask('node-prune-message', () => this.clearMessageQueues(), 5000);
         task.scheduleTask('stats', () => this.showStats(), 10000);
         return Utils.loadNodeKeyAndCertificate()
                     .then(({
