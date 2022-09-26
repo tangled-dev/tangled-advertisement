@@ -11,6 +11,7 @@ import Utils from '../core/utils';
 import _ from 'lodash';
 import {machineId} from 'node-machine-id';
 import request from 'request';
+import ntp from '../core/ntp';
 
 
 export class Peer {
@@ -43,7 +44,7 @@ export class Peer {
     _pruneMessageQueue(queue) {
         const objectsToRemove = [];
         _.each(queue, (value, key) => {
-            if (value?.timestamp < Date.now() - 10000) {
+            if (value?.timestamp < ntp.now() - 30000) {
                 objectsToRemove.push(key);
             }
         });
@@ -62,12 +63,12 @@ export class Peer {
     }
 
     _onNewAdvertisement(data) {
-        if (this.shouldBlockMessage(data, true)) {
+        if (this.shouldBlockMessage(data)) {
             return;
         }
 
         this._messageQueue[data.message_guid] = {
-            timestamp: Date.now()
+            timestamp: ntp.now()
         };
 
         if (this._advertisementRequestQueue[data.request_guid]) {
@@ -95,17 +96,17 @@ export class Peer {
                 type   : 'advertisement_new',
                 content: data
             };
-            ws.send(JSON.stringify(payload));
+            this._sendData(ws, payload);
         }
     }
 
     _onSyncAdvertisement(data) {
-        if (this.shouldBlockMessage(data, true)) {
+        if (this.shouldBlockMessage(data)) {
             return;
         }
 
         this._messageQueue[data.message_guid] = {
-            timestamp: Date.now()
+            timestamp: ntp.now()
         };
 
         if (this._advertisementSyncQueue[data.request_guid]) {
@@ -132,7 +133,7 @@ export class Peer {
                 type   : 'advertisement_sync',
                 content: data
             };
-            ws.send(JSON.stringify(payload));
+            this._sendData(ws, payload);
         }
     }
 
@@ -149,6 +150,7 @@ export class Peer {
     _onAdvertisementSyncRequest(data, ws) {
         data.message_guid = data.request_guid;
         if (!data.node_id ||
+            this._proxyAdvertisementSyncQueue[data.node_id] ||
             this.shouldBlockMessage(data)) {
             return;
         }
@@ -156,12 +158,16 @@ export class Peer {
         this.stats['advertisement_request_sync'] += 1;
 
         this._proxyAdvertisementSyncQueue[data.request_guid] = {
-            timestamp: Date.now(),
+            timestamp: ntp.now(),
             ws
         };
 
         this._messageQueue[data.message_guid] = {
-            timestamp: Date.now()
+            timestamp: ntp.now()
+        };
+
+        this._proxyAdvertisementSyncQueue[data.node_id] = {
+            timestamp: ntp.now()
         };
 
 
@@ -183,11 +189,11 @@ export class Peer {
                                         node_port         : config.NODE_PORT,
                                         request_guid      : data.request_guid,
                                         message_guid      : Database.generateID(32),
-                                        timestamp         : Date.now(),
+                                        timestamp         : ntp.now(),
                                         advertisement_list: advertisements
                                     }
                                 };
-                                ws.send(JSON.stringify(payload));
+                                this._sendData(ws, payload);
                             });
     }
 
@@ -205,12 +211,12 @@ export class Peer {
         this.stats['advertisement_request'] += 1;
 
         this._proxyAdvertisementRequestQueue[data.request_guid] = {
-            timestamp: Date.now(),
+            timestamp: ntp.now(),
             ws
         };
 
         this._messageQueue[data.message_guid] = {
-            timestamp: Date.now()
+            timestamp: ntp.now()
         };
 
         this.propagateRequest('advertisement_request', data, ws);
@@ -295,11 +301,11 @@ export class Peer {
                                         node_port         : config.NODE_PORT,
                                         request_guid      : data.request_guid,
                                         message_guid      : Database.generateID(32),
-                                        timestamp         : Date.now(),
+                                        timestamp         : ntp.now(),
                                         advertisement_list: advertisements
                                     }
                                 };
-                                ws.send(JSON.stringify(payload));
+                                this._sendData(ws, payload);
                             });
     }
 
@@ -336,16 +342,7 @@ export class Peer {
                     node_port   : peerWS.nodePort
                 }
             };
-            try {
-                const data = JSON.stringify(payload);
-                ws.send(data);
-            }
-            catch (e) {
-                console.log('[WARN]: try to send data over a closed connection.');
-                ws && ws.close();
-                network._unregisterWebsocket(ws);
-                return;
-            }
+            this._sendData(ws, payload);
         }
 
         cache.setCacheItem('peer', `peer_list_${ws.connectionID}`, cachedData, Number.MAX_SAFE_INTEGER);
@@ -377,14 +374,7 @@ export class Peer {
 
             cachedData[peerWS.connectionID] = Date.now();
 
-            try {
-                ws.send(data);
-            }
-            catch (e) {
-                console.log('[WARN]: try to send data over a closed connection.');
-                ws && ws.close();
-                network._unregisterWebsocket(ws);
-            }
+            this._sendData(ws, data);
         });
     }
 
@@ -392,7 +382,7 @@ export class Peer {
     requestAdvertisementSync() {
         const requestID                         = Database.generateID(32);
         const cachedData                        = {
-            timestamp: Date.now()
+            timestamp: ntp.now()
         };
         this._advertisementSyncQueue[requestID] = cachedData;
         this._messageQueue[requestID]           = cachedData;
@@ -400,28 +390,21 @@ export class Peer {
             type   : 'advertisement_sync_request',
             content: {
                 node_id     : this.nodeID,
-                timestamp   : Date.now(),
+                timestamp   : ntp.now(),
                 request_guid: requestID
             }
         };
         const data                              = JSON.stringify(payload);
 
         network.registeredClients.forEach(ws => {
-            try {
-                ws.send(data);
-            }
-            catch (e) {
-                console.log('[WARN]: try to send data over a closed connection.');
-                ws && ws.close();
-                network._unregisterWebsocket(ws);
-            }
+            this._sendData(ws, data);
         });
     }
 
     requestAdvertisement() {
         const requestID                            = Database.generateID(32);
         const cachedData                           = {
-            timestamp: Date.now()
+            timestamp: ntp.now()
         };
         this._advertisementRequestQueue[requestID] = cachedData;
         this._messageQueue[requestID]              = cachedData;
@@ -433,7 +416,7 @@ export class Peer {
                 protocol_address_key_identifier: this.protocolAddressKeyIdentifier,
                 device_id                      : this.deviceID,
                 request_guid                   : requestID,
-                timestamp                      : Date.now(),
+                timestamp                      : ntp.now(),
                 advertisement                  : {
                     type: 'all'
                 }
@@ -442,14 +425,7 @@ export class Peer {
         const data                                 = JSON.stringify(payload);
 
         network.registeredClients.forEach(ws => {
-            try {
-                ws.send(data);
-            }
-            catch (e) {
-                console.log('[WARN]: try to send data over a closed connection.');
-                ws && ws.close();
-                network._unregisterWebsocket(ws);
-            }
+            this._sendData(ws, data);
         });
     }
 
@@ -461,17 +437,10 @@ export class Peer {
         const data    = JSON.stringify(payload);
 
         network.registeredClients.forEach(ws => {
-            try {
-                if (ws === excludeWS) {
-                    return;
-                }
-                ws.send(data);
+            if (ws === excludeWS) {
+                return;
             }
-            catch (e) {
-                console.log('[WARN]: try to send data over a closed connection.');
-                ws && ws.close();
-                network._unregisterWebsocket(ws);
-            }
+            this._sendData(ws, data);
         });
     }
 
@@ -485,12 +454,12 @@ export class Peer {
         }
 
         this._proxyAdvertisementPaymentRequestQueue[key] = {
-            timestamp: Date.now(),
+            timestamp: ntp.now(),
             ws
         };
 
         this._messageQueue[data.message_guid] = {
-            timestamp: Date.now()
+            timestamp: ntp.now()
         };
 
         this.propagateRequest('advertisement_payment_request', data, ws);
@@ -527,7 +496,7 @@ export class Peer {
                             advertisement_guid: data.advertisement_guid,
                             request_guid      : data.request_guid,
                             device_id         : data.device_id,
-                            timestamp         : Date.now(),
+                            timestamp         : ntp.now(),
                             advertisement     : {
                                 device_id: data.device_id
                             },
@@ -550,7 +519,7 @@ export class Peer {
                         const message                 = {
                             message_guid             : Database.generateID(32),
                             request_guid             : data.request_guid,
-                            timestamp                : Date.now(),
+                            timestamp                : ntp.now(),
                             advertisement_guid       : data.advertisement_guid,
                             advertisement_ledger_list: [
                                 {
@@ -608,7 +577,7 @@ export class Peer {
     _onAdvertisementPaymentResponse(data) {
         const key = `${data.request_guid}_${data.advertisement_guid}`;
 
-        if (this.shouldBlockMessage(data, true) ||
+        if (this.shouldBlockMessage(data) ||
             !this._proxyAdvertisementPaymentRequestQueue[key] &&
             !this._advertisementPaymentRequestQueue[key]) {
             return;
@@ -617,7 +586,7 @@ export class Peer {
         this.stats['advertisement_payment_response'] += 1;
 
         this._messageQueue[data.message_guid] = {
-            timestamp: Date.now()
+            timestamp: ntp.now()
         };
 
         if (this._advertisementPaymentRequestQueue[key]) {
@@ -643,7 +612,7 @@ export class Peer {
                 type   : 'advertisement_payment_response',
                 content: data
             };
-            ws.send(JSON.stringify(payload));
+            this._sendData(ws, payload);
         }
     }
 
@@ -672,7 +641,7 @@ export class Peer {
         }
 
         this._messageQueue[data.message_guid] = {
-            timestamp: Date.now()
+            timestamp: ntp.now()
         };
 
         this.propagateRequest('advertisement_payment_new', data, ws);
@@ -753,7 +722,7 @@ export class Peer {
                             .then(data => {
                                 const message = {
                                     message_guid             : Database.generateID(32),
-                                    timestamp                : Date.now(),
+                                    timestamp                : ntp.now(),
                                     advertisement_ledger_list: data
                                 };
 
@@ -812,13 +781,13 @@ export class Peer {
                     'creative_request_guid'
                 ]), (_, k) => k === 'creative_request_guid' ? 'request_guid' : k),
                 device_id   : this.deviceID,
-                timestamp   : Date.now(),
+                timestamp   : ntp.now(),
                 message_guid: Database.generateID(32)
             }
         };
 
         const cachedData = {
-            timestamp: Date.now()
+            timestamp: ntp.now()
         };
 
         this._advertisementPaymentRequestQueue[`${payload.content.request_guid}_${payload.content.advertisement_guid}`] = cachedData;
@@ -827,14 +796,7 @@ export class Peer {
 
         const data = JSON.stringify(payload);
         network.registeredClients.forEach(ws => {
-            try {
-                ws.send(data);
-            }
-            catch (e) {
-                console.log('[WARN]: try to send data over a closed connection.');
-                ws && ws.close();
-                network._unregisterWebsocket(ws);
-            }
+            this._sendData(ws, data);
         });
     }
 
@@ -874,8 +836,8 @@ export class Peer {
         });
     }
 
-    shouldBlockMessage(data, skipTimestampCheck = false) {
-        return !data.message_guid || this._messageQueue[data.message_guid] || !skipTimestampCheck && (!data.timestamp || data.timestamp < Date.now() - 60000);
+    shouldBlockMessage(data) {
+        return !data.message_guid || this._messageQueue[data.message_guid] || !data.timestamp || data.timestamp < ntp.now() - 1000;
     }
 
     showStats() {
@@ -902,11 +864,11 @@ export class Peer {
 
         task.scheduleTask('peer-request-advertisement-once-on-boot', () => this.requestAdvertisement(), 15000, false, true);
         task.scheduleTask('peer-request-advertisement', () => this.requestAdvertisement(), 60000);
-        task.scheduleTask('peer-sync-advertisement', () => this.requestAdvertisementSync(), 10000);
+        task.scheduleTask('peer-sync-advertisement', () => this.requestAdvertisementSync(), 60000);
         task.scheduleTask('advertisement-payment-process', () => this.processAdvertisementPayment(), 60000);
         task.scheduleTask('advertiser-pending-payment-prune', () => this.pruneAdvertiserPendingPaymentQueue(), 30000);
         task.scheduleTask('advertisement-queue-prune', () => this.pruneConsumerAdvertisementQueue(), 30000);
-        task.scheduleTask('advertisement-queue-process', () => this.processAdvertisementQueue(), 15000, true);
+        task.scheduleTask('advertisement-queue-process', () => this.processAdvertisementQueue(), 30000, true);
         task.scheduleTask('node-update-throttled-ip-address', () => this.updateThrottledIpAddress(), 60000);
         task.scheduleTask('node-prune-message', () => this.clearMessageQueues(), 5000);
         task.scheduleTask('stats', () => this.showStats(), 10000);
@@ -932,6 +894,17 @@ export class Peer {
                                          }
                                      });
                     });
+    }
+
+    _sendData(ws, payload) {
+        try {
+            ws.send(typeof payload === 'string' ? payload : JSON.stringify(payload));
+        }
+        catch (e) {
+            console.log('[WARN]: try to send data over a closed connection.');
+            ws && ws.close();
+            network._unregisterWebsocket(ws);
+        }
     }
 
     stop() {

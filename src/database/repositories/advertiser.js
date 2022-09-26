@@ -91,10 +91,10 @@ export default class Advertiser {
                     }
 
                     if (advertisement.status === 1) {
-                        this.advertismentAttributeCache.add(advertisement.advertisement_guid);
+                        this.advertisementGUIDCache.add(advertisement.advertisement_guid);
                     }
                     else {
-                        this.advertismentAttributeCache.delete(advertisement.advertisement_guid);
+                        this.advertisementGUIDCache.delete(advertisement.advertisement_guid);
                     }
                     resolve();
                 });
@@ -967,7 +967,7 @@ export default class Advertiser {
                     return reject(err);
                 }
 
-                _.each(advertisementGUIDs, advertisementGUID => advertisements[advertisementGUID].attributes.push(...this.advertismentAttributeCache[advertisementGUID]));
+                _.each(advertisementGUIDs, advertisementGUID => this.advertismentAttributeCache[advertisementGUID] && advertisements[advertisementGUID].attributes.push(...this.advertismentAttributeCache[advertisementGUID]));
 
                 resolve(_.values(advertisements));
             });

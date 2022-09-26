@@ -3,6 +3,7 @@ import database from '../database/database';
 import network from '../network/network';
 import peer from '../network/peer';
 import configLoader from '../config/config-loader';
+import ntp from './ntp';
 
 
 class Service {
@@ -18,6 +19,7 @@ class Service {
         return database.initialize()
                        .then(() => configLoader.load())
                        .then(() => database.checkup())
+                       .then(() => ntp.initialize())
                        .then(() => peer.initialize())
                        .then(() => network.initialize())
                        .then(() => api.initialize())
