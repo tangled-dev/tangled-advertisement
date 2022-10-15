@@ -25,6 +25,7 @@ export class Peer {
         this._ipAddressesThrottled                  = new Set();
         this._ipAddressesValidation                 = {};
         this._messageQueue                          = {};
+        this._deviceMessageQueue                    = {};
         this.protocolAddressKeyIdentifier           = null;
         this.paymentBacklogSize                     = 0;
         this.isProcessingPayment                    = false;
@@ -44,7 +45,7 @@ export class Peer {
     _pruneMessageQueue(queue) {
         const objectsToRemove = [];
         _.each(queue, (value, key) => {
-            if (value?.timestamp < ntp.now() - 30000) {
+            if (value?.timestamp < ntp.now() - (value?.ttl || 30000)) {
                 objectsToRemove.push(key);
             }
         });
@@ -60,6 +61,18 @@ export class Peer {
         this._pruneMessageQueue(this._advertisementRequestQueue);
         this._pruneMessageQueue(this._messageQueue);
         this._pruneMessageQueue(this._advertisementSyncQueue);
+        this._deviceMessageQueue.forEach(deviceID => this._pruneMessageQueue(this._deviceMessageQueue[deviceID]));
+    }
+
+    addDeviceMessage(deviceID, messageGUID, ttl = 60000) {
+        if (!this._deviceMessageQueue[deviceID]) {
+            this._deviceMessageQueue[deviceID] = [];
+        }
+        this._deviceMessageQueue[deviceID].push({
+            message_guid: messageGUID,
+            timestamp   : ntp.now(),
+            ttl
+        });
     }
 
     _onNewAdvertisement(data) {
@@ -155,6 +168,13 @@ export class Peer {
             return;
         }
 
+        const deviceMessageQueueID = `request_sync_${data.node_id}`;
+        if (this._deviceMessageQueue[deviceMessageQueueID]?.length >= 1) {
+            return;
+        }
+
+        this.addDeviceMessage(deviceMessageQueueID, data.message_guid);
+
         this.stats['advertisement_request_sync'] += 1;
 
         this._proxyAdvertisementSyncQueue[data.request_guid] = {
@@ -207,6 +227,13 @@ export class Peer {
             config.MODE_TEST === true && data.protocol_address_key_identifier.startsWith('1')) {
             return;
         }
+
+        const deviceMessageQueueID = `request_${data.device_id}`;
+        if (this._deviceMessageQueue[deviceMessageQueueID]?.length >= 1) {
+            return;
+        }
+
+        this.addDeviceMessage(deviceMessageQueueID, data.message_guid);
 
         this.stats['advertisement_request'] += 1;
 
@@ -468,6 +495,11 @@ export class Peer {
             return;
         }
 
+        const deviceMessageQueueID = `payment_${data.device_id}`;
+        if (this._deviceMessageQueue[deviceMessageQueueID]?.length >= 5) {
+            return;
+        }
+
         this.stats['advertisement_payment_request'] += 1;
 
         cache.getCachedIfPresent('advertiser', `advertisement_${data.advertisement_guid}`, () => advertiserRepository.getAdvertisement({
@@ -537,6 +569,7 @@ export class Peer {
                         };
 
                         this.propagateRequest('advertisement_payment_response', message);
+                        this.addDeviceMessage(deviceMessageQueueID, data.message_guid);
                         return;
                     }
 
