@@ -13,7 +13,6 @@ module.exports = {
         path    : path.resolve(__dirname, 'lib')
     },
     devtool  : 'inline-source-map',
-    watch    : true,
     module   : {
         rules: [
             {
