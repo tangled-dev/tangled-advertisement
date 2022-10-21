@@ -95,7 +95,7 @@ const checkPIDFile = () => {
 
     return new Promise((resolve) => {
         if (!fs.existsSync(pidFile)) {
-            fs.writeFile(pidFile, process.pid, () => {
+            fs.writeFile(pidFile, "" + process.pid, () => {
                 resolve();
             });
             return;
@@ -113,7 +113,7 @@ const checkPIDFile = () => {
                 processKilled = true;
                 console.log('zombie process killed, pid:', pid);
             }
-            fs.writeFile(pidFile, process.pid, () => {
+            fs.writeFile(pidFile, "" + process.pid, () => {
                 setTimeout(() => resolve(), processKilled ? 1000 : 0);
             });
         });
