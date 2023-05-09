@@ -29,11 +29,12 @@ class _OM11pRn90GhpfYrr extends Endpoint {
             last_message_date: ws.lastMessageTime
         })), 'node_id');
         res.send({
-            node_connected: {
+            advertisement_provider: network.advertisementProvider,
+            node_connected        : {
                 count    : nodeConnectedList.length,
                 node_list: nodeConnectedList
             },
-            node_online   : {
+            node_online           : {
                 count    : nodeOnlineList.length,
                 node_list: nodeOnlineList
             }
