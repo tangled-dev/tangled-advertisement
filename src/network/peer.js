@@ -897,6 +897,7 @@ export class Peer {
 
         task.scheduleTask('peer-request-advertisement-once-on-boot', () => this.requestAdvertisement(), 15000, false, true);
         task.scheduleTask('peer-request-advertisement', () => this.requestAdvertisement(), 60000);
+        task.scheduleTask('peer-sync-advertisement-once-on-boot', () => this.requestAdvertisementSync(), 15000, false, true);
         task.scheduleTask('peer-sync-advertisement', () => this.requestAdvertisementSync(), 60000);
         task.scheduleTask('advertisement-payment-process', () => this.processAdvertisementPayment(), 60000);
         task.scheduleTask('advertiser-pending-payment-prune', () => this.pruneAdvertiserPendingPaymentQueue(), 30000);
