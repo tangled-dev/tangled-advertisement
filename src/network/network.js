@@ -376,6 +376,8 @@ class Network {
             return;
         }
 
+        this._registerWebsocketToNodeID(ws);
+
         if (this._registerWebsocketConnection(ws)) {
             if (ws.outBound) {
                 const now               = Math.floor(Date.now() / 1000);
