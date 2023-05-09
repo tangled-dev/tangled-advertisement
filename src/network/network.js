@@ -57,7 +57,11 @@ class Network {
         return this._nodeListOnline;
     }
 
-    addNode(prefix, ip, port, id, isOnline = false) {
+    addNode(prefix, ip, port, id, isOnline = false, advertisementProvider = false) {
+        if (!this.advertisementProvider && !advertisementProvider) {
+            return;
+        }
+
         const url = `${prefix}${ip}:${port}`;
 
         if (isOnline) {
@@ -250,6 +254,16 @@ class Network {
     }
 
     connectToNodes() {
+        _.each(_.shuffle(config.NODE_INITIAL_LIST), ({
+                                                         host,
+                                                         port
+                                                     }) => {
+            let prefix = config.WEBSOCKET_PROTOCOL;
+            if (prefix && host && port) {
+                this.addNode(prefix, host, port, undefined, false, true);
+            }
+        });
+
         database.getRepository('node')
                 .listNodes()
                 .then((nodes) => {
@@ -257,16 +271,6 @@ class Network {
                         this.addNode(node.node_prefix, node.node_address, node.node_port, node.node_id);
                         callback();
                     }, () => {
-                        _.each(_.shuffle(config.NODE_INITIAL_LIST), ({
-                                                                         host,
-                                                                         port
-                                                                     }) => {
-                            let prefix = config.WEBSOCKET_PROTOCOL;
-                            let url    = `${prefix}://${host}:${port}`;
-                            if ((!this._nodeList[url] || !this._nodeList[url].node_id) && (prefix && host && port)) {
-                                this.addNode(prefix, host, port);
-                            }
-                        });
                         this.retryConnectToInactiveNodes().then(_ => _).catch(_ => _);
                     });
                 });
@@ -350,9 +354,9 @@ class Network {
     }
 
     _onNodeHandshake(registry, ws) {
-        ws.nodeID                 = ws.nodeID || registry.node_id;
-        ws.connectionID           = registry.connection_id;
-        ws.advertisement_provider = registry.advertisement_provider;
+        ws.nodeID                = ws.nodeID || registry.node_id;
+        ws.connectionID          = registry.connection_id;
+        ws.advertisementProvider = registry.advertisement_provider;
 
         if (ws.nodeID === this.nodeID) {
 
@@ -366,7 +370,7 @@ class Network {
         }
 
         // drop connection if both nodes are not advertisement providers
-        if (!this.advertisementProvider && !ws.advertisement_provider) {
+        if (!this.advertisementProvider && !ws.advertisementProvider) {
             console.log('[network] closing connection. nodes are not advertisement providers');
             ws.terminate();
             return;

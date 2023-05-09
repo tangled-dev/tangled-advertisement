@@ -157,7 +157,7 @@ export class Peer {
             from   : ws.node
         });
 
-        network.addNode(peer.node_prefix, peer.node_address, peer.node_port, peer.node_id, true);
+        network.addNode(peer.node_prefix, peer.node_address, peer.node_port, peer.node_id, true, peer.advertisementProvider);
     }
 
     _onAdvertisementSyncRequest(data, ws) {
@@ -363,10 +363,11 @@ export class Peer {
             const payload = {
                 type   : 'new_peer',
                 content: {
-                    node_id     : peerWS.nodeID,
-                    node_prefix : peerWS.nodePrefix,
-                    node_address: peerWS.nodeIPAddress,
-                    node_port   : peerWS.nodePort
+                    node_id               : peerWS.nodeID,
+                    node_prefix           : peerWS.nodePrefix,
+                    node_address          : peerWS.nodeIPAddress,
+                    node_port             : peerWS.nodePort,
+                    advertisement_provider: peerWS.advertisementProvider
                 }
             };
             this._sendData(ws, payload);
@@ -379,10 +380,11 @@ export class Peer {
         const payload = {
             type   : 'new_peer',
             content: {
-                node_id     : peerWS.nodeID,
-                node_prefix : peerWS.nodePrefix,
-                node_address: peerWS.nodeIPAddress,
-                node_port   : peerWS.nodePort
+                node_id               : peerWS.nodeID,
+                node_prefix           : peerWS.nodePrefix,
+                node_address          : peerWS.nodeIPAddress,
+                node_port             : peerWS.nodePort,
+                advertisement_provider: peerWS.advertisementProvider
             }
         };
         const data    = JSON.stringify(payload);
