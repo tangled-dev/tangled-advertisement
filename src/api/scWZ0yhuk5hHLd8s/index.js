@@ -2,6 +2,7 @@ import Endpoint from '../endpoint';
 import database, {Database} from '../../database/database';
 import config from '../../config/config';
 import peer from '../../network/peer';
+import cache from '../../core/cache';
 
 
 /**
@@ -87,23 +88,23 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
              'banner_728x90'
              ];*/
 
-            let advertisementGuid       = Database.generateID(32);
-            let deckAttributeGuid      = Database.generateID(32);
+            let advertisementGuid     = Database.generateID(32);
+            let deckAttributeGuid     = Database.generateID(32);
             let headlineAttributeGuid = Database.generateID(32);
             if (payload.advertisement_guid) {
-                advertisementGuid       = payload.advertisement_guid;
-                deckAttributeGuid      = payload.deck_attribute_guid;
+                advertisementGuid     = payload.advertisement_guid;
+                deckAttributeGuid     = payload.deck_attribute_guid;
                 headlineAttributeGuid = payload.head_line_attribute_guid;
             }
 
 
             const advertisementType = 'text_headline_deck';
-            const expiration         = payload.expiration || 31536000 // 365 days;
-            const fundingAddress     = `${peer.protocolAddressKeyIdentifier}0a0${peer.protocolAddressKeyIdentifier}`;
+            const expiration        = payload.expiration || 31536000 /* 365 days */;
+            const fundingAddress    = `${peer.protocolAddressKeyIdentifier}0a0${peer.protocolAddressKeyIdentifier}`;
 
-            //todo: replace with actual data
-            const budgetUSD        = Math.floor(Math.max(100, Math.random() * 1000));
-            const bidImpressionUSD = Math.max(0.1, Math.random()).toFixed(2);
+            const mlxUSDPrice      = cache.getCacheItem('service', 'mlx_usd_price');
+            const budgetUSD        = payload.budget_daily_mlx * mlxUSDPrice;
+            const bidImpressionUSD = payload.bid_impression_mlx * mlxUSDPrice;
 
             return advertiserRepository.getCategoryByGuid(payload.advertisement_category_guid).then(categoryData => {
                 const advertisementAttributes = [

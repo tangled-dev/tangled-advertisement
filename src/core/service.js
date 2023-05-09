@@ -4,11 +4,21 @@ import network from '../network/network';
 import peer from '../network/peer';
 import configLoader from '../config/config-loader';
 import ntp from './ntp';
+import FiatleakAPI from '../api/fiatleak';
+import task from './task';
+import cache from './cache';
 
 
 class Service {
     constructor() {
         this.initialized = false;
+    }
+
+    updateMLXUSDPrice() {
+        return FiatleakAPI.getCurrencyPairSummary().then(summary => {
+            const mlxUSDPrice = summary?.data?.price || 0;
+            cache.setCacheItem('service', 'mlx_usd_price', mlxUSDPrice, Number.MAX_VALUE);
+        }).catch(_ => _);
     }
 
     initialize(options = {}) {
@@ -19,6 +29,10 @@ class Service {
         return database.initialize()
                        .then(() => configLoader.load())
                        .then(() => database.checkup())
+                       .then(() => {
+                           task.scheduleTask('mlx_price_update', () => this.updateMLXUSDPrice(), 60000);
+                           return this.updateMLXUSDPrice();
+                       })
                        .then(() => ntp.initialize())
                        .then(() => peer.initialize())
                        .then(() => network.initialize())
@@ -37,6 +51,7 @@ class Service {
         if (!this.initialized) {
             return;
         }
+        task.removeTask('mlx_price_update');
         this.initialized = false;
     }
 }
