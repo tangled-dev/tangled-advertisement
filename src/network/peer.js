@@ -466,7 +466,7 @@ export class Peer {
         const data    = JSON.stringify(payload);
 
         network.registeredClients.forEach(ws => {
-            if (ws === excludeWS) {
+            if (ws === excludeWS || !ws.advertisementProvider) {
                 return;
             }
             this._sendData(ws, data);
