@@ -17,15 +17,16 @@ import Utils from '../core/utils';
 
 class Network {
     constructor() {
-        this._nodeListOnline     = {};
-        this._nodeList           = {};
-        this._connectionRegistry = {};
-        this._nodeRegistry       = {};
-        this._wss                = null;
-        this.nodeID              = null;
-        this.nodeConnectionID    = null;
-        this._selfConnectionNode = new Set();
-        this.initialized         = false;
+        this._nodeListOnline       = {};
+        this._nodeList             = {};
+        this._connectionRegistry   = {};
+        this._nodeRegistry         = {};
+        this._wss                  = null;
+        this.nodeID                = null;
+        this.nodeConnectionID      = null;
+        this.advertisementProvider = null;
+        this._selfConnectionNode   = new Set();
+        this.initialized           = false;
     }
 
     get registeredClients() {
@@ -274,7 +275,7 @@ class Network {
     retryConnectToOnlineNodes() {
         return new Promise(resolve => {
             const onlineNodeList = _.keys(this._nodeListOnline);
-            console.log('[network-stats] number of nodes online is', onlineNodeList.length,'. active number of connections is', _.keys(this._connectionRegistry).length);
+            console.log('[network-stats] number of nodes online is', onlineNodeList.length, '. active number of connections is', _.keys(this._connectionRegistry).length);
             async.eachLimit(_.shuffle(onlineNodeList), 4, (nodeURL, callback) => {
                 const node = this._nodeList[nodeURL];
 
@@ -319,24 +320,39 @@ class Network {
 
 
     _doHandshake(ws) {
-        let url     = config.WEBSOCKET_PROTOCOL + this.nodePublicIp + ':' + config.NODE_PORT;
-        let payload = {
-            type   : 'node_handshake',
-            content: {
-                node_id      : this.nodeID,
-                connection_id: this.nodeConnectionID,
-                node_prefix  : config.WEBSOCKET_PROTOCOL,
-                node_address : this.nodePublicIp,
-                node_port    : config.NODE_PORT,
-                node         : url
-            }
-        };
-        ws.send(JSON.stringify(payload));
+        const countAdvertisement = cache.getCacheItem('network', 'advertisement_count');
+        let promise;
+        if (countAdvertisement === null) {
+            promise = database.getRepository('advertiser').countAdvertisement().then(countAdvertisement => {
+                cache.setCacheItem('network', 'advertisement_count', countAdvertisement);
+                this.advertisementProvider = countAdvertisement > 0;
+            });
+        }
+        else {
+            promise = Promise.resolve();
+        }
+        promise.then(() => {
+            let url     = config.WEBSOCKET_PROTOCOL + this.nodePublicIp + ':' + config.NODE_PORT;
+            let payload = {
+                type   : 'node_handshake',
+                content: {
+                    node_id               : this.nodeID,
+                    connection_id         : this.nodeConnectionID,
+                    advertisement_provider: this.advertisementProvider,
+                    node_prefix           : config.WEBSOCKET_PROTOCOL,
+                    node_address          : this.nodePublicIp,
+                    node_port             : config.NODE_PORT,
+                    node                  : url
+                }
+            };
+            ws.send(JSON.stringify(payload));
+        });
     }
 
     _onNodeHandshake(registry, ws) {
-        ws.nodeID       = ws.nodeID || registry.node_id;
-        ws.connectionID = registry.connection_id;
+        ws.nodeID                 = ws.nodeID || registry.node_id;
+        ws.connectionID           = registry.connection_id;
+        ws.advertisement_provider = registry.advertisement_provider;
 
         if (ws.nodeID === this.nodeID) {
 
@@ -349,7 +365,13 @@ class Network {
             return;
         }
 
-        this._registerWebsocketToNodeID(ws);
+        // drop connection if both nodes are not advertisement providers
+        if (!this.advertisementProvider && !ws.advertisement_provider) {
+            console.log('[network] closing connection. nodes are not advertisement providers');
+            ws.terminate();
+            return;
+        }
+
         if (this._registerWebsocketConnection(ws)) {
             if (ws.outBound) {
                 const now               = Math.floor(Date.now() / 1000);
@@ -487,6 +509,12 @@ class Network {
                         this.nodeID        = Utils.getNodeIdFromPublicKey(this.nodePublicKey);
                         console.log('node id : ', this.nodeID);
                         return this.doPortMapping()
+                                   .then(() => {
+                                       return database.getRepository('advertiser').countAdvertisement().then(countAdvertisement => {
+                                           cache.setCacheItem('network', 'advertisement_count', countAdvertisement);
+                                           this.advertisementProvider = countAdvertisement > 0;
+                                       });
+                                   })
                                    .then(() => this.startAcceptingConnections())
                                    .catch((e) => {
                                        console.log(`[network] error in nat-pmp ${e}`);

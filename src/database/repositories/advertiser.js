@@ -198,6 +198,18 @@ export default class Advertiser {
         });
     }
 
+    countAdvertisement() {
+        return new Promise((resolve, reject) => {
+            this.database.get(`SELECT count(*) as advertisement_count
+                               FROM advertisement_advertiser.advertisement`, [], (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve(data.advertisement_count);
+            });
+        });
+    }
+
     logAdvertisementRequest(guid, deviceGUID, consumerGUID, ipAddress, requestGUID, protocolAddressKeyIdentifier, rawRequest) {
         return new Promise((resolve, reject) => {
             this.database.run(`INSERT INTO advertisement_advertiser.advertisement_request_log
