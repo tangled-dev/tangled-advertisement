@@ -98,7 +98,7 @@ class _scWZ0yhuk5hHLd8s extends Endpoint {
 
 
             const advertisementType = 'text_headline_deck';
-            const expiration         = Math.floor(Math.random() * 10) * 86400;
+            const expiration         = payload.expiration || 31536000 // 365 days;
             const fundingAddress     = `${peer.protocolAddressKeyIdentifier}0a0${peer.protocolAddressKeyIdentifier}`;
 
             //todo: replace with actual data
