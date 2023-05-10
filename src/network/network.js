@@ -13,6 +13,8 @@ import NatAPI from 'nat-api';
 import task from '../core/task';
 import cache from '../core/cache';
 import Utils from '../core/utils';
+import request from 'request';
+import ntp from '../core/ntp';
 
 
 class Network {
@@ -24,7 +26,9 @@ class Network {
         this._wss                  = null;
         this.nodeID                = null;
         this.nodeConnectionID      = null;
+        this.nodePublicIp          = null;
         this.advertisementProvider = null;
+        this.isValidIp             = null;
         this._selfConnectionNode   = new Set();
         this.initialized           = false;
     }
@@ -190,6 +194,7 @@ class Network {
         catch (e) {
             return console.log('[network] failed to parse json message ' + message);
         }
+        ws.lastMessageDelay = ntp.now() - jsonMessage.content?.timestamp || ws.lastMessageDelay;
 
         const messageType = jsonMessage.type;
         const content     = jsonMessage.content;
@@ -503,6 +508,31 @@ class Network {
         });
     }
 
+    checkIsValidPublicIpAddress() {
+        return new Promise((resolve) => {
+            const api = `${config.EXTERNAL_API_IP_CHECK}?p1=${this.nodePublicIp}&p2=${this.protocolAddressKeyIdentifier}`;
+            request.get(
+                api,
+                {},
+                (error, response, body) => {
+                    if (!error && response.statusCode === 200) {
+                        try {
+                            const data    = JSON.parse(body);
+                            const isValid = !!data.is_valid;
+                            cache.setCacheItem('network', 'network_valid_public_ip_address', isValid, Number.MAX_VALUE);
+                            this.isValidIp = isValid;
+                            return resolve();
+                        }
+                        catch (e) {
+                            console.log('[network] error', e);
+                        }
+                    }
+                    resolve();
+                }
+            );
+        });
+    }
+
     _initializeServer() {
         this.natAPI = new NatAPI();
         return Utils.loadNodeKeyAndCertificate()
@@ -534,8 +564,9 @@ class Network {
                     });
     }
 
-    initialize() {
-        this.nodeConnectionID = this.generateNewID();
+    initialize(protocolAddressKeyIdentifier) {
+        this.nodeConnectionID             = this.generateNewID();
+        this.protocolAddressKeyIdentifier = protocolAddressKeyIdentifier;
 
         console.log('[network] starting network');
         return (config.NODE_HOST_FORCE ?
@@ -557,10 +588,13 @@ class Network {
         ).then(ip => {
             console.log('[network] node public-ip', ip);
             this.nodePublicIp = ip;
-            return this._initializeServer().then(() => {
+            return this.checkIsValidPublicIpAddress().then(() => {
+                return this._initializeServer();
+            }).then(() => {
                 eventBus.emit('network_ready');
-                task.scheduleTask('network-reconnect', () => this.retryConnectToInactiveNodes(), 10000);
+                task.scheduleTask('network_reconnect', () => this.retryConnectToInactiveNodes(), 10000);
                 task.scheduleTask('retry_connect_online_node', this.retryConnectToOnlineNodes.bind(this), 10000, true);
+                task.scheduleTask('check_valid_public_ip_address', () => this.checkIsValidPublicIpAddress(), 180000);
             }).catch(e => console.log('[network] err', e));
         }).catch(() => {
             setTimeout(() => this.initialize(), 1000);
@@ -577,7 +611,9 @@ class Network {
 
     stop() {
         eventBus.removeAllListeners('node_handshake');
-        task.removeTask('network-reconnect');
+        task.removeTask('network_reconnect');
+        task.removeTask('retry_connect_online_node');
+        task.removeTask('check_valid_public_ip_address');
 
         this.initialized = false;
         this.stopWebSocket();

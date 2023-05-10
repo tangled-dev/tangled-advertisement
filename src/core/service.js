@@ -35,7 +35,7 @@ class Service {
                        })
                        .then(() => ntp.initialize())
                        .then(() => peer.initialize())
-                       .then(() => network.initialize())
+                       .then(() => network.initialize(peer.protocolAddressKeyIdentifier))
                        .then(() => api.initialize())
                        .catch(e => {
                            console.log(`[service] ${e && (e.message || e.api_message) || e}`);
