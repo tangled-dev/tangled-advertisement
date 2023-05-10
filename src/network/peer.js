@@ -191,7 +191,7 @@ export class Peer {
         };
 
 
-        this.propagateRequest('advertisement_sync_request', data, ws);
+        this.propagateRequest('advertisement_sync_request', data, ws, true);
 
         const advertiserRepository = database.getRepository('advertiser');
         advertiserRepository.listConsumerActiveAdvertisement(data.node_id)
@@ -246,7 +246,7 @@ export class Peer {
             timestamp: ntp.now()
         };
 
-        this.propagateRequest('advertisement_request', data, ws);
+        this.propagateRequest('advertisement_request', data, ws, true);
 
         const advertiserRepository = database.getRepository('advertiser');
         advertiserRepository.syncAdvertisementToConsumer(data.node_id, data.device_id)
@@ -458,7 +458,7 @@ export class Peer {
         });
     }
 
-    propagateRequest(type, content, excludeWS) {
+    propagateRequest(type, content, excludeWS, excludeNonAdvertisementProvider) {
         const payload = {
             type,
             content
@@ -466,7 +466,7 @@ export class Peer {
         const data    = JSON.stringify(payload);
 
         network.registeredClients.forEach(ws => {
-            if (ws === excludeWS || !ws.advertisementProvider) {
+            if (ws === excludeWS || excludeNonAdvertisementProvider && !ws.advertisementProvider) {
                 return;
             }
             this._sendData(ws, data);
@@ -491,7 +491,7 @@ export class Peer {
             timestamp: ntp.now()
         };
 
-        this.propagateRequest('advertisement_payment_request', data, ws);
+        this.propagateRequest('advertisement_payment_request', data, ws, true);
 
         if (!advertiserRepository.getAdvertisementGUIDCached().has(data.advertisement_guid)) {
             return;
@@ -774,6 +774,7 @@ export class Peer {
                             .catch(err => {
                                 this.isProcessingPayment = false;
                                 console.log(`[peer] error processing payments:`, err);
+                                setTimeout(() => this.processAdvertisementPayment(), 10000);
                             });
     }
 
@@ -872,7 +873,7 @@ export class Peer {
     }
 
     shouldBlockMessage(data) {
-        return !data.message_guid || this._messageQueue[data.message_guid] || !data.timestamp || data.timestamp < ntp.now() - 1000;
+        return !data.message_guid || this._messageQueue[data.message_guid] || !data.timestamp || data.timestamp < ntp.now() - 30000;
     }
 
     showStats() {
