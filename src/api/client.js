@@ -1,7 +1,7 @@
 import request from 'request';
 
 
-class Client {
+export class Client {
     static HOST = 'localhost';
     static PORT = 5500;
 
@@ -24,10 +24,10 @@ class Client {
         this.nodeSignature = nodeSignature;
     }
 
-    post(path, json) {
+    static sendPost(url, json) {
         return new Promise((resolve, reject) => {
             request.post(
-                `https://${Client.HOST}:${Client.PORT}/${path}`,
+                url,
                 {
                     json,
                     rejectUnauthorized: false
@@ -44,10 +44,10 @@ class Client {
         });
     }
 
-    get(path) {
+    static sendGet(url) {
         return new Promise((resolve, reject) => {
-            request.post(
-                `https://${Client.HOST}:${Client.PORT}/${path}`,
+            request.get(
+                url,
                 {
                     rejectUnauthorized: false
                 },
@@ -63,12 +63,32 @@ class Client {
         });
     }
 
+    post(path, json) {
+        return Client.sendPost(`https://${Client.HOST}:${Client.PORT}/${path}`, json);
+    }
+
+    get(path) {
+        return Client.sendGet(`https://${Client.HOST}:${Client.PORT}/${path}`);
+    }
+
     getWalletInformation() {
         return this.get(`api/${this.nodeID}/${this.nodeSignature}/OBexeX0f0MsnL1S3`);
     }
 
     sendTransaction(payload) {
         return this.post(`api/${this.nodeID}/${this.nodeSignature}/XPzc85T3reYmGro1`, {p0: payload});
+    }
+
+    getTransactionOutput(transactionId, outputPosition) {
+        return this.post(`api/${this.nodeID}/${this.nodeSignature}/KN2ZttYDEKzCulEZ`, {
+            p0: transactionId,
+            p1: outputPosition,
+            p2: 'qGuUgMMVmaCvqrvoWG6zARjkrujGMpzJmpNhBgz1y3RjBG7ZR'
+        });
+    }
+
+    listTransactionOutput(transactionId, outputPosition) {
+        return this.get(`api/${this.nodeID}/${this.nodeSignature}/KN2ZttYDEKzCulEZ?p0=${transactionId}&p1=${outputPosition}&p2=qGuUgMMVmaCvqrvoWG6zARjkrujGMpzJmpNhBgz1y3RjBG7ZR`);
     }
 }
 

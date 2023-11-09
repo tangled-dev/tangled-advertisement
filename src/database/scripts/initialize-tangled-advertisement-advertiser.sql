@@ -164,6 +164,7 @@ CREATE TABLE advertisement_ledger
     create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer'),
     UNIQUE(advertisement_guid, advertisement_request_guid, transaction_type_guid)
 );
+CREATE INDEX idx_advertisement_ledger_advertisement_request_guid ON advertisement_ledger ("advertisement_request_guid");
 CREATE INDEX idx_advertisement_ledger_advertisement_request ON advertisement_ledger ("advertisement_guid", "advertisement_request_guid");
 CREATE INDEX idx_advertisement_ledger_create_date ON advertisement_ledger ("create_date");
 
@@ -350,5 +351,49 @@ INSERT INTO advertisement_category (advertisement_category, advertisement_catego
 INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('technology', 'TQPs3dfZt', NULL);
 INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('technology - phone', 'NQ2JTh96P', 'TQPs3dfZt');
 INSERT INTO advertisement_category (advertisement_category, advertisement_category_guid, advertisement_category_guid_parent) VALUES  ('technology - service', '884LpvLlG', 'TQPs3dfZt');
+
+
+CREATE TABLE advertisement_network
+(
+    network_id                      INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    network_guid                    char(32) UNIQUE NOT NULL,
+    network_name                    varchar(256)    NOT NULL,
+    network_domain                  varchar(256),
+    budget_daily_usd                decimal(16, 8)  NOT NULL DEFAULT 0.0,
+    budget_daily_mlx                bigint(16)      NOT NULL DEFAULT 0,
+    protocol_address_hash           char(128)       NOT NULL,
+    protocol_address_key_public     char(45)        NOT NULL,
+    object_guid                     char(32),
+    object_key                      char(32),
+    status                          smallint        NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
+    create_date                     timestamp       NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
+);
+CREATE INDEX idx_advertisement_network_guid_status ON advertisement_network ("network_guid", "status");
+
+CREATE TABLE advertisement_network_request_log
+(
+    log_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+    log_guid                        char(32) UNIQUE,
+    advertisement_guid              char(32),
+    advertisement_url               varchar(2048),
+    advertisement_request_guid      char(32),
+    network_guid                    char(32),
+    network_guid_device             char(64),
+    ip_address_device               varchar(45),
+    advertisement_request_raw       varchar(2000),
+    bid_impression_mlx              bigint(16),
+    count_impression                int(32),
+    expiration                      timestamp, -- (indicates when the record can be pruned)
+    object_guid                     char(32), -- (i.e. advertisement_attribute)
+    object_key                      char(32), -- (i.e. create_attribute_guid of a target phrase that matched targeting)
+    status smallint NOT NULL DEFAULT 1 CHECK (length(status) <= 3 AND TYPEOF(status) = 'integer'),
+    create_date timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
+);
+CREATE INDEX idx_advertisement_network_request_log_advertisement_request ON advertisement_network_request_log ("advertisement_guid", "advertisement_request_guid");
+CREATE INDEX idx_advertisement_network_request_log_advertisement_request_guid_status ON advertisement_network_request_log ("advertisement_request_guid", "status");
+CREATE INDEX idx_advertisement_network_request_log_network_guid_status ON advertisement_network_request_log ("network_guid", "status");
+CREATE INDEX idx_advertisement_network_request_log_network_guid_device_status ON advertisement_network_request_log ("network_guid_device", "status");
+CREATE INDEX idx_advertisement_network_request_log_ip_address_device_status ON advertisement_network_request_log ("ip_address_device", "status");
+CREATE INDEX idx_advertisement_network_request_log_expiration_status ON advertisement_network_request_log ("expiration", "status");
 
 COMMIT;

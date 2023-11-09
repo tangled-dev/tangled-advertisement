@@ -573,6 +573,66 @@ export default class Advertiser {
         });
     }
 
+    listAdvertisementLedgerByLedgerGUID(ledgerGUIDList) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_ledger l INNER JOIN advertisement_ledger_attribute a on l.ledger_guid = a.ledger_guid', {'l.ledger_guid_in': ledgerGUIDList});
+            this.database.all(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+
+                if (!data || data.length === 0) {
+                    return resolve();
+                }
+
+                const advertisementLedgerData = {};
+                data.forEach(row0 => {
+                    if (advertisementLedgerData[row0.ledger_guid]) {
+                        return;
+                    }
+
+                    advertisementLedgerData[row0.ledger_guid]               = _.pick(row0, [
+                        'ledger_id',
+                        'ledger_guid',
+                        'ledger_guid_pair',
+                        'advertisement_guid',
+                        'advertisement_request_guid',
+                        'transaction_type_guid',
+                        'tx_address_deposit_vout_md5',
+                        'currency_guid',
+                        'deposit',
+                        'withdrawal',
+                        'price_usd',
+                        'status',
+                        'create_date'
+                    ]);
+                    advertisementLedgerData[row0.ledger_guid]['attributes'] = [];
+                    data.forEach(row1 => {
+                        if (row0.ledger_guid !== row1.ledger_guid) {
+                            return;
+                        }
+                        advertisementLedgerData[row0.ledger_guid].attributes.push(_.pick(row1, [
+                            'ledger_attribute_id',
+                            'ledger_attribute_guid',
+                            'ledger_guid',
+                            'attribute_type_guid',
+                            'object_guid',
+                            'object_key',
+                            'value',
+                            'status',
+                            'create_date'
+                        ]));
+                    });
+                });
+
+                resolve(Object.values(advertisementLedgerData));
+            });
+        });
+    }
+
     addAdvertisementPayment(advertisementGUID, requestGUID, mlxAmount, transactionType, attributes = []) {
         const ledgerGUID          = Database.generateID(32);
         const ledgerPairGUID      = Database.generateID(32);
@@ -895,6 +955,12 @@ export default class Advertiser {
                 if (err) {
                     return reject(err);
                 }
+
+                data.map(attribute => {
+                    attribute.attribute_type = this.normalizationRepository.getType(attribute.attribute_type_guid);
+                    attribute.object         = this.normalizationRepository.getType(attribute.object_guid);
+                });
+
                 resolve(data);
             });
         });
@@ -979,10 +1045,145 @@ export default class Advertiser {
                     return reject(err);
                 }
 
+                this.cacheAdvertisementAttributes(data);
+
                 _.each(advertisementGUIDs, advertisementGUID => this.advertismentAttributeCache[advertisementGUID] && advertisements[advertisementGUID].attributes.push(...this.advertismentAttributeCache[advertisementGUID]));
 
                 resolve(_.values(advertisements));
             });
         });
     }
+
+    addAdvertisementNetwork(networkGuid,
+                            networkName,
+                            networkDomain,
+                            budgetDailyUSD,
+                            budgetDailyMLX,
+                            addressHash,
+                            addressKeyPublic) {
+        return new Promise((resolve, reject) => {
+            this.database.run(`INSERT
+            OR REPLACE INTO advertisement_advertiser.advertisement_network (
+                    network_guid, network_name, network_domain, budget_daily_usd, budget_daily_mlx, protocol_address_hash, protocol_address_key_public
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)`, [
+                networkGuid,
+                networkName,
+                networkDomain,
+                budgetDailyUSD,
+                budgetDailyMLX,
+                addressHash,
+                addressKeyPublic
+            ], (err) => {
+                if (err) {
+                    console.log('[database] error', err);
+                    return reject(err);
+                }
+
+                resolve();
+            });
+        });
+    }
+
+    getAdvertisementNetwork(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_advertiser.advertisement_network', where);
+            this.database.get(sql, parameters, (err, advertisementNetwork) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve(advertisementNetwork);
+            });
+        });
+    }
+
+
+
+    updateAdvertisementNetworkRequest(set, where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildUpdate('UPDATE advertisement_advertiser.advertisement_network_request_log', set, where);
+            this.database.all(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve(data);
+            });
+        });
+    }
+    listAdvertisementNetworkRequest(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery(`SELECT advertisement_network_request_log.*,
+                                                  l.ledger_id,
+                                                  l.ledger_guid,
+                                                  l.ledger_guid_pair,
+                                                  l.advertisement_request_guid,
+                                                  l.transaction_type_guid,
+                                                  l.tx_address_deposit_vout_md5,
+                                                  l.currency_guid,
+                                                  l.deposit,
+                                                  l.withdrawal,
+                                                  l.price_usd
+                                           FROM advertisement_advertiser.advertisement_network_request_log
+                                                    LEFT JOIN advertisement_advertiser.advertisement_ledger l
+                                                              USING (advertisement_request_guid)`, where);
+            this.database.all(sql, parameters, (err, advertisementNetworkRequestList) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve(advertisementNetworkRequestList);
+            });
+        });
+    }
+
+    logAdvertisementNetworkAdvertisementRequestList(advertisementNetworkAdvertisementRequestLog) {
+        if (advertisementNetworkAdvertisementRequestLog.length === 0) {
+            return Promise.resolve();
+        }
+
+        const statements = [];
+
+        advertisementNetworkAdvertisementRequestLog.forEach(networkAdvertisementRequest => {
+            statements.push([
+                `INSERT INTO advertisement_advertiser.advertisement_network_request_log
+                 (log_guid,
+                  advertisement_guid,
+                  advertisement_url,
+                  advertisement_request_guid,
+                  network_guid,
+                  network_guid_device,
+                  ip_address_device,
+                  advertisement_request_raw,
+                  bid_impression_mlx,
+                  count_impression,
+                  expiration)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+                networkAdvertisementRequest.log_guid,
+                networkAdvertisementRequest.advertisement_guid,
+                networkAdvertisementRequest.advertisement_url,
+                networkAdvertisementRequest.advertisement_request_guid,
+                networkAdvertisementRequest.network_guid,
+                networkAdvertisementRequest.network_guid_device,
+                networkAdvertisementRequest.ip_address_device,
+                networkAdvertisementRequest.advertisement_request_raw,
+                networkAdvertisementRequest.bid_impression_mlx,
+                networkAdvertisementRequest.count_impression,
+                networkAdvertisementRequest.expiration
+            ]);
+        });
+
+        return this.database.runBatchAsync(statements);
+    }
+
+    fillAdvertisementAttributes(advertisementList) {
+        return this._buildConsumerAdvertisementList(advertisementList);
+    }
+
 }

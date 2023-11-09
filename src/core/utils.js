@@ -217,6 +217,22 @@ class Utils {
             });
         });
     }
+
+    getAddressComponent(addressFull) {
+        addressFull   = addressFull.trim();
+        const matches = addressFull.match(new RegExp("(?<address>.*)(?<version>0a0)(?<identifier>.*)"));
+        if (!matches || !matches.groups['address'] || !matches.groups['version'] || !matches.groups['identifier']) {
+            return {};
+        }
+        const address    = matches.groups['address'];
+        const version    = matches.groups['version'];
+        const identifier = matches.groups['identifier'];
+        return {
+            address,
+            version,
+            identifier
+        };
+    }
 }
 
 

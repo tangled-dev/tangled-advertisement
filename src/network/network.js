@@ -376,7 +376,7 @@ class Network {
 
         // drop connection if both nodes are not advertisement providers
         if (!this.advertisementProvider && !ws.advertisementProvider) {
-            console.log('[network] closing connection. nodes are not advertisement providers');
+            console.log('[network] closing connection. both nodes are not advertisement providers');
             ws.terminate();
             return;
         }

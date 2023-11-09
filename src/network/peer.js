@@ -12,6 +12,7 @@ import _ from 'lodash';
 import {machineId} from 'node-machine-id';
 import request from 'request';
 import ntp from '../core/ntp';
+import utils from '../core/utils';
 
 
 export class Peer {
@@ -49,8 +50,15 @@ export class Peer {
                 objectsToRemove.push(key);
             }
         });
-
-        objectsToRemove.forEach(key => delete queue[key]);
+        if (objectsToRemove.length === 0) {
+            return;
+        }
+        if (Array.isArray(queue)) {
+            _.pullAt(queue, objectsToRemove);
+        }
+        else {
+            objectsToRemove.forEach(key => delete queue[key]);
+        }
     }
 
     clearMessageQueues() {
@@ -61,7 +69,7 @@ export class Peer {
         this._pruneMessageQueue(this._advertisementRequestQueue);
         this._pruneMessageQueue(this._messageQueue);
         this._pruneMessageQueue(this._advertisementSyncQueue);
-        this._deviceMessageQueue.forEach(deviceID => this._pruneMessageQueue(this._deviceMessageQueue[deviceID]));
+        _.forEach(this._deviceMessageQueue, message => this._pruneMessageQueue(message));
     }
 
     addDeviceMessage(deviceID, messageGUID, ttl = 60000) {
@@ -73,6 +81,63 @@ export class Peer {
             timestamp   : ntp.now(),
             ttl
         });
+    }
+
+    _onAdvertisementNetworkSyncAdvertisement(data) {
+        if (this.shouldBlockMessage(data)) {
+            return;
+        }
+
+        this._messageQueue[data.message_guid] = {
+            timestamp: ntp.now()
+        };
+
+        if (this._advertisementRequestQueue[data.request_guid]) {
+            const {
+                      network_advertisement_list: networkAdvertisementList,
+                      node_id                   : nodeID
+                  } = data;
+            console.log(`[peer] advertisement network >> new advertisements ${JSON.stringify(networkAdvertisementList, null, 4)}`);
+            async.eachSeries(networkAdvertisementList, (networkAdvertisement, callback0) => {
+                const advertisements           = networkAdvertisement.advertisement_list;
+                const protocolTransactionID    = networkAdvertisement.protocol_transaction_id;
+                const protocolAddressHash      = networkAdvertisement.protocol_address_hash;
+                const protocolOutputPosition   = networkAdvertisement.protocol_output_position;
+                const deposit                  = networkAdvertisement.deposit;
+                const priceUSD                 = networkAdvertisement.price_usd;
+                const advertisementRequestGUID = networkAdvertisement.advertisement_request_guid;
+
+                const consumerRepository = database.getRepository('consumer');
+                consumerRepository.addAdvertisementLedger(advertisementRequestGUID, protocolAddressHash, protocolTransactionID, protocolOutputPosition, deposit, priceUSD)
+                                  .then(ledgerEntry => {
+                                      async.eachSeries(advertisements, (advertisement, callback1) => {
+                                          if (advertisement.bid_impression_mlx < config.ADS_TRANSACTION_AMOUNT_MIN) {
+                                              return callback1();
+                                          }
+                                          return consumerRepository.addAdvertisementNetworkAdvertisement(advertisement, ledgerEntry.ledger_guid, nodeID, advertisementRequestGUID)
+                                                                   .then(() => callback1())
+                                                                   .catch((e) => {
+                                                                       console.error(e);
+                                                                       callback1();
+                                                                   });
+                                      });
+                                  })
+                                  .then(() => callback0())
+                                  .catch((e) => {
+                                      console.error(e);
+                                      callback0();
+                                  });
+            });
+
+        }
+        else if (this._proxyAdvertisementRequestQueue[data.request_guid]) {
+            const ws      = this._proxyAdvertisementRequestQueue[data.request_guid].ws;
+            const payload = {
+                type   : 'advertisement_network:advertisement_sync',
+                content: data
+            };
+            this._sendData(ws, payload);
+        }
     }
 
     _onNewAdvertisement(data) {
@@ -336,6 +401,238 @@ export class Peer {
                             });
     }
 
+    _onAdvertisementNetworkAdvertisementRequest(data, ws) {
+        data.message_guid = data.request_guid;
+        if (this._ipAddressesThrottled.has(data.node_ip_address) ||
+            !data.protocol_address_key_identifier ||
+            !data.device_id ||
+            this.shouldBlockMessage(data) ||
+            config.MODE_TEST === false && !data.protocol_address_key_identifier.startsWith('1') ||
+            config.MODE_TEST === true && data.protocol_address_key_identifier.startsWith('1')) {
+            return;
+        }
+
+        const deviceMessageQueueID = `advertisement_network_request_${data.device_id}`;
+        if (this._deviceMessageQueue[deviceMessageQueueID]?.length >= 1) {
+            return;
+        }
+
+        this.addDeviceMessage(deviceMessageQueueID, data.message_guid);
+
+        this.stats['advertisement_network:advertisement_request'] += 1;
+
+        this._proxyAdvertisementRequestQueue[data.request_guid] = {
+            timestamp: ntp.now(),
+            ws
+        };
+
+        this._messageQueue[data.message_guid] = {
+            timestamp: ntp.now()
+        };
+
+        this.propagateRequest('advertisement_network:advertisement_request', data, ws, true);
+
+        if (data.advertisement?.advertisement_network_publisher?.includes(this.nodeID)) {
+            const advertiserRepository = database.getRepository('advertiser');
+            advertiserRepository.getAdvertisementNetwork({
+                network_guid: data.node_id,
+                status      : 1
+            }).then(advertisementNetwork => {
+                if (advertisementNetwork) {
+                    // check if there is available balance
+                    advertiserRepository.listAdvertisementNetworkRequest({
+                        network_guid                              : advertisementNetwork.network_guid,
+                        'advertisement_network_request_log.status': 1
+                    }).then(advertisementRequestList => {
+                        const usedBudget    = advertisementRequestList.reduce((total, advertisementRequest) => total + advertisementRequest.bid_impression_mlx * advertisementRequest.count_impression, 0);
+                        let availableBudget = advertisementNetwork.budget_daily_mlx - usedBudget;
+                        if (availableBudget >= 50000) {
+                            /* get advertisements for ad network */
+                            const expiration = ntp.now() + 86400; //1 day
+                            return advertiserRepository
+                                .listAdvertisement({status: 1})
+                                .then(advertisementList => {
+                                    advertisementList                = _.sortBy(advertisementList, ['bid_impression_mlx']);
+                                    const newAdvertisementRequestMap = {};
+                                    while (availableBudget > 0) {
+                                        let hasNewAdvertisementImpression = false;
+                                        for (const advertisement of advertisementList) {
+                                            if (availableBudget > advertisement.bid_impression_mlx) {
+                                                availableBudget -= advertisement.bid_impression_mlx;
+                                                let newAdvertisementRequest = newAdvertisementRequestMap[advertisement.advertisement_guid];
+                                                if (!newAdvertisementRequest) {
+                                                    newAdvertisementRequest = {
+                                                        publisher_guid            : this.nodeID,
+                                                        advertisement_request_guid: data.request_guid,
+                                                        advertisement_guid        : advertisement.advertisement_guid,
+                                                        advertisement_url         : advertisement.advertisement_url,
+                                                        bid_impression_mlx        : advertisement.bid_impression_mlx,
+                                                        count_impression          : 0,
+                                                        ledger_guid               : undefined,
+                                                        protocol_transaction_id   : undefined,
+                                                        protocol_output_position  : undefined,
+                                                        expiration
+                                                    };
+
+                                                    newAdvertisementRequestMap[advertisement.advertisement_guid] = newAdvertisementRequest;
+                                                }
+                                                newAdvertisementRequest.count_impression++;
+                                                hasNewAdvertisementImpression = true;
+                                            }
+                                            else {
+                                                break;
+                                            }
+                                        }
+                                        if (!hasNewAdvertisementImpression) {
+                                            break;
+                                        }
+                                    }
+                                    const newAdvertisementRequestList = Object.values(newAdvertisementRequestMap);
+                                    if (newAdvertisementRequestList.length > 0) {
+                                        const advertisementRequestRaw = JSON.stringify(data);
+                                        const transactionAmount       = Math.min(config.ADS_TRANSACTION_AMOUNT_MAX, newAdvertisementRequestList.reduce((total, item) => total + item.bid_impression_mlx * item.count_impression, 0));
+                                        const transactionAmountUSD    = (transactionAmount / config.MILLIX_USD_VALUE).toFixed(2);
+
+                                        const {
+                                                  address,
+                                                  identifier
+                                              } = utils.getAddressComponent(advertisementNetwork.protocol_address_hash);
+
+                                        if (!address) {
+                                            throw Error(`Invalid address (${advertisementNetwork.protocol_address_hash} for advertisement network ${advertisementNetwork.network_name}`);
+                                        }
+
+                                        const output = {
+                                            address_base          : address,
+                                            address_version       : config.TRANSACTION_ADDRESS_VERSION,
+                                            address_key_identifier: identifier,
+                                            amount                : transactionAmount
+                                        };
+                                        return advertiserRepository.addAdvertisementPayment(null, data.request_guid, transactionAmount, 'withdrawal:external')
+                                                                   .then(advertisementLedger => {
+                                                                       return client.sendTransaction({
+                                                                           'transaction_output_list': [output],
+                                                                           'transaction_output_fee' : {
+                                                                               'fee_type': 'transaction_fee_default',
+                                                                               'amount'  : config.TRANSACTION_PROXY_FEE
+                                                                           }
+                                                                       }).then(paymentData => {
+                                                                           console.log('[peer] payment done:', paymentData);
+                                                                           if (paymentData.api_status !== 'success') {
+                                                                               return Promise.reject(data.api_message);
+                                                                           }
+                                                                           const transaction = paymentData.transaction[paymentData.transaction.length - 1];
+                                                                           return advertiserRepository.updateAdvertisementLedgerWithPayment(transaction, [
+                                                                               {
+                                                                                   output,
+                                                                                   advertisement_ledger: {
+                                                                                       ledger_guid               : advertisementLedger.ledger_guid,
+                                                                                       advertisement_request_guid: data.request_guid,
+                                                                                       withdrawal                : transactionAmount,
+                                                                                       price_usd                 : transactionAmountUSD
+                                                                                   }
+                                                                               }
+                                                                           ]);
+                                                                       }).then(() => {
+                                                                           /* send payment and update advertisement network request log */
+                                                                           const advertisementNetworkAdvertisementRequestLog = newAdvertisementRequestList.map(advertisementRequest => {
+                                                                               return {
+                                                                                   ledger_guid               : advertisementLedger.ledger_guid,
+                                                                                   log_guid                  : Database.generateID(32),
+                                                                                   advertisement_guid        : advertisementRequest.advertisement_guid,
+                                                                                   advertisement_url         : advertisementRequest.advertisement_url,
+                                                                                   advertisement_request_guid: advertisementRequest.advertisement_request_guid,
+                                                                                   network_guid              : advertisementNetwork.network_guid,
+                                                                                   network_guid_device       : data.device_id,
+                                                                                   ip_address_device         : data.node_ip_address,
+                                                                                   advertisement_request_raw : advertisementRequestRaw,
+                                                                                   bid_impression_mlx        : advertisementRequest.bid_impression_mlx,
+                                                                                   count_impression          : advertisementRequest.count_impression,
+                                                                                   expiration
+                                                                               };
+                                                                           });
+                                                                           return advertiserRepository.logAdvertisementNetworkAdvertisementRequestList(advertisementNetworkAdvertisementRequestLog)
+                                                                                                      .then(() => advertisementRequestList.concat(...advertisementNetworkAdvertisementRequestLog));
+                                                                       });
+                                                                   });
+                                    }
+
+                                    /* return advertisements that should be propagated */
+                                    return advertisementRequestList;
+                                });
+                        }
+
+                        /* return advertisements that should be propagated */
+                        return advertisementRequestList;
+
+                    }).then(advertisementRequestList => {
+                        // propagate list of active advertisement
+                        if (advertisementRequestList && advertisementRequestList.length > 0) {
+                            const networkAdvertisementLedgerMap = {};
+                            const advertisementMap              = {};
+                            advertisementRequestList.forEach(advertisementRequest => {
+                                let ledgerEntry = networkAdvertisementLedgerMap[advertisementRequest.ledger_guid];
+                                if (!ledgerEntry) {
+                                    ledgerEntry                                                     = {
+                                        advertisement_request_guid: advertisementRequest.advertisement_request_guid,
+                                        advertisement_list        : []
+                                    };
+                                    networkAdvertisementLedgerMap[advertisementRequest.ledger_guid] = ledgerEntry;
+                                }
+                                const advertisement         = _.pick(advertisementRequest, [
+                                    'advertisement_guid',
+                                    'advertisement_url',
+                                    'bid_impression_mlx',
+                                    'count_impression',
+                                    'expiration'
+                                ]);
+                                advertisement['attributes'] = [];
+
+                                ledgerEntry.advertisement_list.push(advertisement);
+                                advertisementMap[advertisement.advertisement_guid] = advertisement;
+                            });
+
+                            const normalizationRepository = database.getRepository('normalization');
+                            return advertiserRepository.listAdvertisementLedgerByLedgerGUID(Object.keys(networkAdvertisementLedgerMap))
+                                                       .then(ledgerItemList => {
+                                                           ledgerItemList.forEach(row => {
+                                                               networkAdvertisementLedgerMap[row.ledger_guid]['protocol_transaction_id']  = row.attributes.find(item => item.attribute_type_guid === normalizationRepository.get('protocol_transaction_id'))?.value;
+                                                               networkAdvertisementLedgerMap[row.ledger_guid]['protocol_output_position'] = 0;
+                                                               networkAdvertisementLedgerMap[row.ledger_guid]['protocol_address_hash']    = advertisementNetwork.protocol_address_hash;
+                                                               networkAdvertisementLedgerMap[row.ledger_guid]['deposit']                  = row.withdrawal;
+                                                               networkAdvertisementLedgerMap[row.ledger_guid]['price_usd']                = row.price_usd;
+                                                           });
+                                                           return advertiserRepository.getAdvertisementAttributes({advertisement_guid_in: advertisementRequestList.map(item => item.advertisement_guid)})
+                                                                                      .then(attributeList => {
+                                                                                          attributeList.forEach(row => {
+                                                                                              advertisementMap[row.advertisement_guid].attributes.push(_.pick(row, [
+                                                                                                  'advertisement_attribute_guid',
+                                                                                                  'value',
+                                                                                                  'attribute_type',
+                                                                                                  'object'
+                                                                                              ]));
+                                                                                          });
+                                                                                          console.log(`sending advertisements to advertisement network ${advertisementNetwork.network_name}`, advertisementRequestList);
+                                                                                          const payload = {
+                                                                                              type   : 'advertisement_network:advertisement_sync',
+                                                                                              content: {
+                                                                                                  node_id                   : this.nodeID,
+                                                                                                  request_guid              : data.request_guid,
+                                                                                                  message_guid              : Database.generateID(32),
+                                                                                                  timestamp                 : ntp.now(),
+                                                                                                  network_advertisement_list: Object.values(networkAdvertisementLedgerMap)
+                                                                                              }
+                                                                                          };
+                                                                                          this._sendData(ws, payload);
+                                                                                      });
+                                                       });
+                        }
+                    });
+                }
+            });
+        }
+    }
+
     _onPeerConnection(ws) {
         this.sendPeerList(ws);
         this.notifyNewPeer(ws);
@@ -457,6 +754,186 @@ export class Peer {
             this._sendData(ws, data);
         });
     }
+
+    advertisementNetworkCheckPayment() {
+        const consumerRepository = database.getRepository('consumer');
+        return consumerRepository.listAdvertisementNetworkQueue({
+            payment_received_date: null,
+            status               : 1
+        }).then(activeAdvertisementNetworkPendingPaymentList => {
+            const ledgerGUIDSet = new Set(activeAdvertisementNetworkPendingPaymentList.map(item => item.ledger_guid));
+            return new Promise(resolve => {
+                async.eachSeries(ledgerGUIDSet, (ledgerGUID, callback) => {
+                    consumerRepository.getAdvertisementLedger({ledger_guid: ledgerGUID})
+                                      .then(ledgerItem => {
+                                          return client.listTransactionOutput(ledgerItem.protocol_transaction_id, ledgerItem.protocol_output_position)
+                                                       .then(transactionOutput => {
+                                                           if (transactionOutput.is_stable === 1 && transactionOutput.is_double_spend === 0 && transactionOutput.address === ledgerItem.protocol_address_hash &&
+                                                               transactionOutput.amount === ledgerItem.deposit) {
+                                                               ledgerItem.protocol_is_stable       = 1;
+                                                               ledgerItem.protocol_is_double_spend = 0;
+                                                               return [
+                                                                   ledgerItem,
+                                                                   transactionOutput
+                                                               ];
+                                                           }
+                                                           return Promise.reject();
+                                                       });
+                                      })
+                                      .then(([ledgerItem, transactionOutput]) => {
+                                          return consumerRepository.updateLedger(ledgerItem, {ledger_guid: ledgerItem.ledger_guid})
+                                                                   .then(() => {
+                                                                       return consumerRepository.updateAdvertisementNetworkQueue({
+                                                                           payment_received_date: transactionOutput.stable_date
+                                                                       }, {ledger_guid: ledgerItem.ledger_guid});
+                                                                   })
+                                                                   .then(() => callback());
+                                      })
+                                      .catch(() => callback());
+                }, () => resolve());
+            });
+        });
+    }
+
+    advertisementNetworkRequestAdvertisement() {
+        const consumerRepository = database.getRepository('consumer');
+        consumerRepository.listAdvertisementNetworkPublisher({status: 1})
+                          .then((advertisementNetworkPublisherList) => {
+                              const advertisementNetworkPublisherIDs     = advertisementNetworkPublisherList.map(item => item.publisher_guid);
+                              const requestID                            = Database.generateID(32);
+                              const cachedData                           = {
+                                  timestamp: ntp.now()
+                              };
+                              this._advertisementRequestQueue[requestID] = cachedData;
+                              this._messageQueue[requestID]              = cachedData;
+                              const payload                              = {
+                                  type   : 'advertisement_network:advertisement_request',
+                                  content: {
+                                      node_id                        : this.nodeID,
+                                      node_ip_address                : network.nodePublicIp,
+                                      protocol_address_key_identifier: this.protocolAddressKeyIdentifier,
+                                      device_id                      : this.deviceID,
+                                      request_guid                   : requestID,
+                                      timestamp                      : ntp.now(),
+                                      advertisement                  : {
+                                          advertisement_network_publisher: advertisementNetworkPublisherIDs,
+                                          type                           : 'all'
+                                      }
+                                  }
+                              };
+                              const data                                 = JSON.stringify(payload);
+
+                              network.registeredClients.forEach(ws => {
+                                  this._sendData(ws, data);
+                              });
+                          });
+    }
+
+    processWebmasterAdvertisementPayment() {
+        const webmasterPaymentInfoMap = {};
+        let outputList;
+        const consumerRepository      = database.getRepository('consumer');
+        return consumerRepository.listAdvertisementNetworkWebmasterQueue({
+            ledger_guid: null,
+            status     : 1
+        }).then(webmasterRequestPendingPaymentList => {
+            if (webmasterRequestPendingPaymentList.length === 0) {
+                return;
+            }
+
+            webmasterRequestPendingPaymentList.forEach(item => {
+                let webmasterPaymentInfo = webmasterPaymentInfoMap[item.webmaster_guid];
+                if (!webmasterPaymentInfo) {
+                    webmasterPaymentInfo                         = {
+                        output         : {
+                            amount: 0
+                        },
+                        queue_item_list: []
+                    };
+                    webmasterPaymentInfoMap[item.webmaster_guid] = webmasterPaymentInfo;
+                }
+                webmasterPaymentInfo.output.amount += item.bid_impression_mlx * item.count_impression;
+                webmasterPaymentInfo.queue_item_list.push(item);
+            });
+            return consumerRepository.listAdvertisementNetworkWebmaster({
+                webmaster_guid_in: Object.keys(webmasterPaymentInfoMap),
+                status           : 1
+            });
+        }).then(webmasterList => {
+            webmasterList.forEach(webmaster => {
+                const {
+                          address,
+                          version,
+                          identifier
+                      } = utils.getAddressComponent(webmaster.protocol_address_hash);
+                if (!address) {
+                    delete webmasterPaymentInfoMap[webmaster.webmaster_guid];
+                    return;
+                }
+                webmasterPaymentInfoMap[webmaster.webmaster_guid].output['address_base']           = address;
+                webmasterPaymentInfoMap[webmaster.webmaster_guid].output['address_version']        = version;
+                webmasterPaymentInfoMap[webmaster.webmaster_guid].output['address_key_identifier'] = identifier;
+            });
+
+            outputList = Object.values(webmasterPaymentInfoMap).map(webmasterPaymentInfo => webmasterPaymentInfo.output);
+            if (outputList.length === 0) {
+                return Promise.reject();
+            }
+
+            return client.sendTransaction({
+                'transaction_output_list': outputList,
+                'transaction_output_fee' : {
+                    'fee_type': 'transaction_fee_default',
+                    'amount'  : config.TRANSACTION_PROXY_FEE
+                }
+            });
+        }).then(paymentData => {
+            console.log('[peer] payment done:', paymentData);
+            if (paymentData.api_status !== 'success') {
+                return Promise.reject(paymentData.api_message);
+            }
+            const transaction   = paymentData.transaction[paymentData.transaction.length - 1];
+            const transactionID = transaction.transaction_id;
+            return new Promise((resolve) => {
+                let outputPosition = 0;
+                async.eachSeries(Object.values(webmasterPaymentInfoMap), (webmasterPaymentInfo, callback) => {
+                    const output              = webmasterPaymentInfo.output;
+                    const protocolAddressHash = `${output.address_base}${output.address_version}${output.address_key_identifier}`;
+                    const amountUSD           = (output.amount / config.MILLIX_USD_VALUE).toFixed(2);
+                    consumerRepository.addAdvertisementLedger(null, protocolAddressHash, transactionID, outputPosition, output.amount, amountUSD)
+                                      .then(ledgerItem => {
+                                          return consumerRepository.updateAdvertisementNetworkWebmasterQueue({ledger_guid: ledgerItem.ledger_guid}, {queue_guid_in: webmasterPaymentInfo.queue_item_list.map(item => item.queue_guid)});
+                                      })
+                                      .catch(e => {
+                                          console.error(e);
+                                      })
+                                      .then(() => {
+                                          outputPosition++;
+                                          callback();
+                                      });
+                }, () => resolve());
+            });
+        }).catch(_ => _);
+    }
+
+    advertisementNetworkExpireRequestLog() {
+        const advertiserRepository = database.getRepository('advertiser');
+        const oneDayAgo            = ntp.now() - 86400000;
+        return advertiserRepository.updateAdvertisementNetworkRequest({status: 0}, {
+            expiration_max: oneDayAgo,
+            status        : 1
+        });
+    }
+
+    advertisementNetworkExpireWebmasterRequestLog() {
+        const consumerRepository = database.getRepository('consumer');
+        const oneDayAgo          = ntp.now() - 86400000;
+        return consumerRepository.updateAdvertisementNetworkWebmasterQueue({status: 0}, {
+            create_date_max: oneDayAgo,
+            status         : 1
+        });
+    }
+
 
     propagateRequest(type, content, excludeWS, excludeNonAdvertisementProvider) {
         const payload = {
@@ -892,6 +1369,10 @@ export class Peer {
         eventBus.on('advertisement_new', this._onNewAdvertisement.bind(this));
         eventBus.on('advertisement_sync', this._onSyncAdvertisement.bind(this));
 
+        // ad network
+        eventBus.on('advertisement_network:advertisement_request', this._onAdvertisementNetworkAdvertisementRequest.bind(this));
+        eventBus.on('advertisement_network:advertisement_sync', this._onAdvertisementNetworkSyncAdvertisement.bind(this));
+
         //out
         eventBus.on('peer_connection', this._onPeerConnection.bind(this));
 
@@ -909,6 +1390,13 @@ export class Peer {
         task.scheduleTask('node-update-throttled-ip-address', () => this.updateThrottledIpAddress(), 60000);
         task.scheduleTask('node-prune-message', () => this.clearMessageQueues(), 5000);
         task.scheduleTask('stats', () => this.showStats(), 10000);
+        // ad network
+        task.scheduleTask('advertisement-network:expire-request-log', () => this.advertisementNetworkExpireRequestLog(), 60000);
+        task.scheduleTask('advertisement-network:expire-webmaster-request-log', () => this.advertisementNetworkExpireWebmasterRequestLog(), 60000);
+        task.scheduleTask('advertisement-network:request-advertisement', () => this.advertisementNetworkRequestAdvertisement(), 60000);
+        task.scheduleTask('advertisement-network:webmaster-advertisement-payment-process', () => this.processWebmasterAdvertisementPayment(), 60000);
+        task.scheduleTask('advertisement-network:check-payment', () => this.advertisementNetworkCheckPayment(), 60000, true);
+
         return Utils.loadNodeKeyAndCertificate()
                     .then(({
                                node_id       : nodeID,
@@ -947,8 +1435,10 @@ export class Peer {
     stop() {
         eventBus.removeAllListeners('new_peer');
         eventBus.removeAllListeners('advertisement_request');
+        eventBus.removeAllListeners('advertisement_network:advertisement_request');
         eventBus.removeAllListeners('advertisement_sync');
         eventBus.removeAllListeners('advertisement_payment_new');
+        eventBus.removeAllListeners('advertisement_network:advertisement_sync');
         eventBus.removeAllListeners('advertisement_payment_request');
         eventBus.removeAllListeners('advertisement_payment_response');
         eventBus.removeAllListeners('peer_connection');
@@ -961,6 +1451,11 @@ export class Peer {
         task.removeTask('advertisement-queue-prune');
         task.removeTask('advertisement-queue-process');
         task.removeTask('node-update-throttled-ip-address');
+        task.removeTask('advertisement-network:check-payment');
+        task.removeTask('advertisement-network:webmaster-advertisement-payment-process');
+        task.removeTask('advertisement-network:request-advertisement');
+        task.removeTask('advertisement-network:expire-request-log');
+        task.removeTask('advertisement-network:expire-webmaster-request-log');
     }
 }
 

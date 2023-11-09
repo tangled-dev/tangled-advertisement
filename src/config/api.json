@@ -143,6 +143,42 @@
       "version_released": "1.20.3",
       "permission": "{\"require_identity\": true, \"private\": false}",
       "enable": true
+    },
+    {
+      "id": "UmwbrQYLpFIaoYmJ",
+      "name": "add_advertisement_network",
+      "description": "register an advertisement network",
+      "method": "GET",
+      "version_released": "1.20.3",
+      "permission": "{\"require_identity\": true, \"private\": false}",
+      "enable": true
+    },
+    {
+      "id": "xNBOltHPwmjgtqRn",
+      "name": "add_advertisement_network_publisher",
+      "description": "register an advertisement network publisher",
+      "method": "GET",
+      "version_released": "1.20.3",
+      "permission": "{\"require_identity\": true, \"private\": false}",
+      "enable": true
+    },
+    {
+      "id": "EDrSkqhlqkYkImEy",
+      "name": "add_advertisement_network_webmaster",
+      "description": "register an advertisement network webmaster",
+      "method": "GET",
+      "version_released": "1.20.3",
+      "permission": "{\"require_identity\": true, \"private\": false}",
+      "enable": true
+    },
+    {
+      "id": "NJMykmvfNICmggfT",
+      "name": "get_next_advertisement_network_webmaster_advertisement_render",
+      "description": "get a random advertisement for a script registered as an advertisement network webmaster",
+      "method": "GET",
+      "version_released": "1.20.3",
+      "permission": "{\"require_identity\": true, \"private\": false}",
+      "enable": true
     }
   ]
 }

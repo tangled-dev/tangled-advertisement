@@ -1,4 +1,6 @@
 import {Database} from '../database';
+import ntp from '../../core/ntp';
+import objectHash from '../../core/crypto/object-hash';
 
 export default class Consumer {
     constructor(database) {
@@ -8,6 +10,122 @@ export default class Consumer {
 
     setNormalizationRepository(repository) {
         this.normalizationRepository = repository;
+    }
+
+
+    getAdvertisementLedger(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_consumer.settlement_ledger', where);
+            this.database.get(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve(data);
+            });
+        });
+    }
+
+    listAdvertisementLedger(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_consumer.settlement_ledger', where);
+            this.database.all(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve(data);
+            });
+        });
+    }
+
+    updateAdvertisementNetworkQueue(set, where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildUpdate('UPDATE advertisement_consumer.advertisement_network_queue', set, where);
+            this.database.all(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve(data);
+            });
+        });
+    }
+
+    listAdvertisementNetworkQueue(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_consumer.advertisement_network_queue', where);
+            this.database.all(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve(data);
+            });
+        });
+    }
+
+    addAdvertisementNetworkAdvertisement(advertisement, ledgerGUID, publisherGUID, requestGUID) {
+        const now        = Math.floor(ntp.now() / 1000);
+        const statements = [
+            [
+                `INSERT
+                OR IGNORE INTO advertisement_consumer.advertisement_network_queue
+                 (queue_guid,
+                  ledger_guid,
+                  publisher_guid,
+                  advertisement_guid,
+                  creative_request_guid,
+                  bid_impression_mlx,
+                  payment_request_date,
+                  payment_received_date,
+                  advertisement_url,
+                  count_paid_impression,
+                  expiration)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+                Database.generateID(32),
+                ledgerGUID,
+                publisherGUID,
+                advertisement.advertisement_guid,
+                requestGUID,
+                advertisement.bid_impression_mlx,
+                now,
+                null,
+                advertisement.advertisement_url,
+                advertisement.count_impression,
+                advertisement.expiration
+            ]
+        ];
+
+        advertisement.attributes.forEach(attribute => {
+            statements.push([
+                `INSERT
+                OR IGNORE INTO advertisement_consumer.advertisement_attribute
+                 (advertisement_attribute_guid,
+                  advertisement_guid,
+                  attribute_type_guid,
+                  object_guid,
+                  object_key,
+                  value)
+                 VALUES (?, ?, ?, ?, ?, ?);`,
+                attribute.advertisement_attribute_guid,
+                advertisement.advertisement_guid,
+                this.normalizationRepository.get(attribute.attribute_type),
+                this.normalizationRepository.get(attribute.object),
+                attribute.object_key,
+                attribute.value
+            ]);
+        });
+
+        return this.database.runBatchAsync(statements);
     }
 
     addAdvertisement(advertisement, advertiserGUID, advertiserIpAddress, advertiserPort, requestGUID) {
@@ -338,7 +456,7 @@ export default class Consumer {
 
     getTotalAdvertisementPayment(where = {}) {
         return new Promise((resolve, reject) => {
-            where = {
+            where   = {
                 'payment_received_date!': null,
                 ...where
             };
@@ -352,6 +470,285 @@ export default class Consumer {
                 }
                 return resolve(data.total);
             });
+        });
+    }
+
+    addAdvertisementNetworkPublisher(publisherGuid,
+                                     publisherName,
+                                     publisherDomain,
+                                     addressHash,
+                                     addressKeyPublic) {
+        return new Promise((resolve, reject) => {
+            this.database.run(`INSERT
+            OR REPLACE INTO advertisement_consumer.advertisement_network_publisher (
+                    publisher_guid, publisher_name, publisher_domain, protocol_address_hash, protocol_address_key_public
+                    ) VALUES (?, ?, ?, ?, ?)`, [
+                publisherGuid,
+                publisherName,
+                publisherDomain,
+                addressHash,
+                addressKeyPublic
+            ], (err) => {
+                if (err) {
+                    console.log('[database] error', err);
+                    return reject(err);
+                }
+
+                resolve();
+            });
+        });
+    }
+
+    getAdvertisementNetworkPublisher(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_consumer.advertisement_network_publisher', where);
+            this.database.get(sql, parameters, (err, advertisementNetworkPublisher) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve(advertisementNetworkPublisher);
+            });
+        });
+    }
+
+    addAdvertisementNetworkWebmaster(webmasterGUID,
+                                     webmasterName,
+                                     webmasterDomain,
+                                     addressHash,
+                                     addressKeyPublic,
+                                     webmasterCallbackURL) {
+        return new Promise((resolve, reject) => {
+            this.database.run(`INSERT
+            OR REPLACE INTO advertisement_consumer.advertisement_network_webmaster (
+                    webmaster_guid, webmaster_name, webmaster_domain, protocol_address_hash, protocol_address_key_public, webmaster_callback_url
+                    ) VALUES (?, ?, ?, ?, ?, ?)`, [
+                webmasterGUID,
+                webmasterName,
+                webmasterDomain,
+                addressHash,
+                addressKeyPublic,
+                webmasterCallbackURL
+            ], (err) => {
+                if (err) {
+                    console.log('[database] error', err);
+                    return reject(err);
+                }
+
+                resolve();
+            });
+        });
+    }
+
+    getAdvertisementNetworkWebmaster(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_consumer.advertisement_network_webmaster', where);
+            this.database.get(sql, parameters, (err, advertisementNetworkWebmaster) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve(advertisementNetworkWebmaster);
+            });
+        });
+    }
+
+    listAdvertisementNetworkWebmaster(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_consumer.advertisement_network_webmaster', where);
+            this.database.all(sql, parameters, (err, advertisementNetworkWebmasterList) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve(advertisementNetworkWebmasterList);
+            });
+        });
+    }
+
+    listAdvertisementNetworkPublisher(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_consumer.advertisement_network_publisher', where);
+            this.database.all(sql, parameters, (err, advertisementNetworkPublisherList) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve(advertisementNetworkPublisherList);
+            });
+        });
+    }
+
+    addAdvertisementLedger(advertisementRequestGUID, protocolAddressHash, protocolTransactionId, protocolOutputPosition, deposit, priceUSD) {
+        return new Promise((resolve, reject) => {
+            const ledgerGUID                       = Database.generateID(32);
+            const transactionAddressDepositVOutMd5 = objectHash.getMD5Buffer(`${protocolTransactionId}${protocolAddressHash}${protocolOutputPosition}${deposit}`).toString('hex');
+            this.database.run(`
+                INSERT
+                OR IGNORE INTO advertisement_consumer.settlement_ledger (ledger_guid,
+                                                                       advertisement_request_guid,
+                                                                       protocol_address_hash,
+                                                                       protocol_transaction_id,
+                                                                       protocol_output_position,
+                                                                       tx_address_deposit_vout_md5,
+                                                                       deposit,
+                                                                       price_usd)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
+                ledgerGUID,
+                advertisementRequestGUID,
+                protocolAddressHash,
+                protocolTransactionId,
+                protocolOutputPosition,
+                transactionAddressDepositVOutMd5,
+                deposit,
+                priceUSD
+            ], (err) => {
+                if (err) {
+                    console.log('[database] error', err);
+                    return reject(err);
+                }
+
+                this.database.get(`SELECT *
+                                   FROM advertisement_consumer.settlement_ledger
+                                   WHERE tx_address_deposit_vout_md5 = ?`, [transactionAddressDepositVOutMd5], (err, data) => {
+                    if (err) {
+                        console.log('[database] error', err);
+                        return reject(err);
+                    }
+
+                    resolve(data);
+                });
+            });
+        });
+    }
+
+    updateLedger(set, where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildUpdate('UPDATE advertisement_consumer.settlement_ledger', set, where);
+            this.database.all(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve(data);
+            });
+        });
+    }
+
+    listAdvertisementNetworkWebmasterQueue(where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildQuery('SELECT * FROM advertisement_consumer.advertisement_network_webmaster_queue', where);
+            this.database.all(sql, parameters, (err, advertisementNetworkPublisherList) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve(advertisementNetworkPublisherList);
+            });
+        });
+    }
+
+    updateAdvertisementNetworkWebmasterQueue(set, where) {
+        return new Promise((resolve, reject) => {
+            const {
+                      sql,
+                      parameters
+                  } = Database.buildUpdate('UPDATE advertisement_consumer.advertisement_network_webmaster_queue', set, where);
+            this.database.all(sql, parameters, (err, data) => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve(data);
+            });
+        });
+    }
+
+    processRandomAdvertisementNetworkAdvertisement(advertisement, webmasterGUID, webmasterTargetGUID, webmasterTargetIpAddress, webmasterTargetLanguage) {
+        return new Promise((resolve, reject) => {
+            advertisement.count_impression += 1;
+            this.database.run('UPDATE advertisement_consumer.advertisement_network_queue SET count_impression = ?1, impression_date_first = COALESCE(impression_date_first, ?2), impression_date_last = ?2 WHERE queue_id = ?3', [
+                advertisement.count_impression,
+                Math.floor(Date.now() / 1000),
+                advertisement.queue_id
+            ], (err) => {
+                if (err) {
+                    reject(err);
+                }
+
+                const queueID = Database.generateID(32);
+                this.database.run(`INSERT INTO advertisement_consumer.advertisement_network_webmaster_queue (queue_guid,
+                                                                                                             webmaster_guid,
+                                                                                                             webmaster_target_guid,
+                                                                                                             webmaster_target_ip_address,
+                                                                                                             webmaster_target_language,
+                                                                                                             advertisement_network_queue_guid,
+                                                                                                             bid_impression_mlx,
+                                                                                                             advertisement_url)
+                                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
+                    queueID,
+                    webmasterGUID,
+                    webmasterTargetGUID,
+                    webmasterTargetIpAddress,
+                    webmasterTargetLanguage,
+                    advertisement.queue_guid,
+                    advertisement.bid_impression_mlx,
+                    advertisement.advertisement_url
+                ], (err) => {
+                    if (err) {
+                        reject(err);
+                    }
+
+                    advertisement['webmaster_target_guid'] = webmasterTargetGUID;
+                    advertisement['webmaster_queue_guid']  = queueID;
+                    resolve();
+                });
+            });
+        }).then(() => {
+            return this.fillAdvertisementAttributes(advertisement);
+        });
+    }
+
+    getRandomAdvertisementNetworkAdvertisement(webmasterGUID, webmasterTargetGUID, webmasterTargetIpAddress, webmasterTargetLanguage) {
+        return new Promise((resolve, reject) => {
+            return this.database.get(`SELECT *
+                                      FROM advertisement_consumer.advertisement_network_queue
+                                      WHERE queue_guid NOT IN
+                                            (SELECT advertisement_network_queue_guid
+                                             FROM advertisement_consumer.advertisement_network_webmaster_queue
+                                             WHERE webmaster_guid = ?
+                                               AND webmaster_target_guid = ?
+                                               AND status = 1)
+                                        AND status = 1
+                                        AND payment_received_date IS NOT NULL
+                                        AND count_impression < count_paid_impression
+                                      ORDER BY RANDOM() LIMIT 1`,
+                [
+                    webmasterGUID,
+                    webmasterTargetGUID
+                ], (err, advertisement) => {
+
+                    if (err) {
+                        return reject(err);
+                    }
+
+                    if (!advertisement) {
+                        return reject({message: 'no_advertisement_available'});
+                    }
+
+                    return this.processRandomAdvertisementNetworkAdvertisement(advertisement, webmasterGUID, webmasterTargetGUID, webmasterTargetIpAddress, webmasterTargetLanguage).then(resolve).catch(reject);
+                });
         });
     }
 }
