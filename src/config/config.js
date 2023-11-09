@@ -21,8 +21,10 @@ export const EXTERNAL_API_IP_CHECK       = 'https://api.millix.com/UGOKZVnF8QzVu
 export const ADS_TRANSACTION_IP_MAX      = 8; /* maximum number of ads paid to a single ip address */
 export const ADS_TRANSACTION_AMOUNT_MIN = 1000;
 export const ADS_TRANSACTION_AMOUNT_MAX = 999999999;
-export const ADS_PRUNE_AGE              = 86400; // 1 days old
+export const ADS_PRUNE_AGE              = 86400; // 1 day old
 export const MILLIX_USD_VALUE           = 100000000 / 56; /*TODO: get this from an external api like fiatleak*/
+
+export const ADVERTISEMENT_PROVIDER     = undefined;
 
 export const NODE_INITIAL_LIST         = [
     {
@@ -83,6 +85,7 @@ export default {
     ADS_TRANSACTION_AMOUNT_MIN,
     ADS_PAYMENT_BACKLOG_MAX,
     TRANSACTION_OUTPUT_MAX,
+    ADVERTISEMENT_PROVIDER,
     EXTERNAL_API_IP_CHECK,
     TRANSACTION_PROXY_FEE,
     DATABASE_CONNECTION,

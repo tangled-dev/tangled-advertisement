@@ -334,7 +334,7 @@ class Network {
         if (countAdvertisement === null) {
             promise = database.getRepository('advertiser').countAdvertisement().then(countAdvertisement => {
                 cache.setCacheItem('network', 'advertisement_count', countAdvertisement);
-                this.advertisementProvider = countAdvertisement > 0;
+                this.advertisementProvider = config.ADVERTISEMENT_PROVIDER || countAdvertisement > 0;
             });
         }
         else {
@@ -548,7 +548,7 @@ class Network {
                                    .then(() => {
                                        return database.getRepository('advertiser').countAdvertisement().then(countAdvertisement => {
                                            cache.setCacheItem('network', 'advertisement_count', countAdvertisement);
-                                           this.advertisementProvider = countAdvertisement > 0;
+                                           this.advertisementProvider = config.ADVERTISEMENT_PROVIDER || countAdvertisement > 0;
                                        });
                                    })
                                    .then(() => this.startAcceptingConnections())
