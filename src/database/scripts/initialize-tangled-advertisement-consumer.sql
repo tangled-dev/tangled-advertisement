@@ -161,7 +161,7 @@ CREATE TABLE advertisement_network_webmaster_queue
     create_date                         timestamp NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS INTEGER)) CHECK (length(create_date) <= 10 AND TYPEOF(create_date) = 'integer')
     );
 CREATE INDEX idx_advertisement_network_webmaster_queue_ledger_guid_webmaster_guid ON advertisement_network_webmaster_queue ("ledger_guid", "webmaster_guid");
-CREATE INDEX idx_advertisement_network_webmaster_queue_webmaster_guid_webmaster_target_guid_advertisement_guid_status ON advertisement_network_webmaster_queue ("webmaster_guid", "webmaster_target_guid", "advertisement_guid", "status");
+CREATE INDEX idx_advertisement_network_webmaster_queue_webmaster_guid_webmaster_target_guid_advertisement_network_queue_guid_status ON advertisement_network_webmaster_queue ("webmaster_guid", "webmaster_target_guid", "advertisement_network_queue_guid", "status");
 CREATE INDEX idx_advertisement_network_webmaster_queue_create_date_status ON advertisement_network_webmaster_queue ("create_date", "status");
 
 CREATE TABLE advertisement_network_queue
