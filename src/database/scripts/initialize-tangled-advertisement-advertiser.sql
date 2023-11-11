@@ -118,7 +118,7 @@ CREATE INDEX idx_advertisement_request_log_advertisement_request ON advertisemen
 CREATE INDEX idx_advertisement_request_log_advertisement_request_guid_status ON advertisement_request_log ("advertisement_request_guid", "status");
 CREATE INDEX idx_advertisement_request_log_tangled_guid_consumer_status ON advertisement_request_log ("tangled_guid_consumer", "status");
 CREATE INDEX idx_advertisement_request_log_tangled_guid_device_status ON advertisement_request_log ("tangled_guid_device", "status");
-CREATE INDEX idx_advertisement_request_log_ip_address_consumer_status ON advertisement_request_log ("ip_address_consumer", "status");
+CREATE INDEX idx_advertisement_request_log_status_advertisement_guid_ip_address_consumer ON advertisement_request_log ("status", "advertisement_guid", "ip_address_consumer");
 
 -- replace click log with umbrella table
 -- advertisement_engagement_log

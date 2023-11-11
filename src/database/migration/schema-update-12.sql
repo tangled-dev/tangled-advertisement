@@ -2,6 +2,7 @@ BEGIN TRANSACTION;
 UPDATE schema_information SET value = "12" WHERE key = "version";
 
 CREATE INDEX IF NOT EXISTS advertisement_advertiser.idx_advertisement_ledger_advertisement_request_guid ON advertisement_ledger ("advertisement_request_guid");
+CREATE INDEX IF NOT EXISTS advertisement_advertiser.idx_advertisement_request_log_status_advertisement_guid_ip_address_consumer ON advertisement_request_log ("status", "advertisement_guid", "ip_address_consumer");
 
 CREATE TABLE IF NOT EXISTS advertisement_advertiser.advertisement_network
 (
