@@ -440,7 +440,7 @@ export class Peer {
             }).then(advertisementNetwork => {
                 if (advertisementNetwork) {
                     // check if there is available balance
-                    advertiserRepository.listAdvertisementNetworkRequest({
+                    return advertiserRepository.listAdvertisementNetworkRequest({
                         network_guid                              : advertisementNetwork.network_guid,
                         'advertisement_network_request_log.status': 1
                     }).then(advertisementRequestList => {
@@ -448,7 +448,7 @@ export class Peer {
                         let availableBudget = advertisementNetwork.budget_daily_mlx - usedBudget;
                         if (availableBudget >= 50000) {
                             /* get advertisements for ad network */
-                            const expiration = ntp.now() + 86400; //1 day
+                            const expiration = Math.floor(ntp.now() / 1000) + 86400; //1 day
                             return advertiserRepository
                                 .listAdvertisement({status: 1})
                                 .then(advertisementList => {
@@ -629,7 +629,7 @@ export class Peer {
                         }
                     });
                 }
-            });
+            }).catch(_ => _);
         }
     }
 
@@ -792,7 +792,7 @@ export class Peer {
                                       .catch(() => callback());
                 }, () => resolve());
             });
-        });
+        }).catch(_ => _);
     }
 
     advertisementNetworkRequestAdvertisement() {
@@ -826,7 +826,7 @@ export class Peer {
                               network.registeredClients.forEach(ws => {
                                   this._sendData(ws, data);
                               });
-                          });
+                          }).catch(_ => _);
     }
 
     processWebmasterAdvertisementPayment() {
@@ -918,20 +918,20 @@ export class Peer {
 
     advertisementNetworkExpireRequestLog() {
         const advertiserRepository = database.getRepository('advertiser');
-        const oneDayAgo            = ntp.now() - 86400000;
+        const oneDayAgo            = Math.floor(ntp.now() / 1000);
         return advertiserRepository.updateAdvertisementNetworkRequest({status: 0}, {
             expiration_max: oneDayAgo,
             status        : 1
-        });
+        }).catch(_ => _);
     }
 
     advertisementNetworkExpireWebmasterRequestLog() {
         const consumerRepository = database.getRepository('consumer');
-        const oneDayAgo          = ntp.now() - 86400000;
+        const oneDayAgo          = Math.floor(Date.now() / 1000) - 86400;
         return consumerRepository.updateAdvertisementNetworkWebmasterQueue({status: 0}, {
             create_date_max: oneDayAgo,
             status         : 1
-        });
+        }).catch(_ => _);
     }
 
 
