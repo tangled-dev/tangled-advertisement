@@ -579,17 +579,22 @@ export class Peer {
                                     };
                                     networkAdvertisementLedgerMap[advertisementRequest.ledger_guid] = ledgerEntry;
                                 }
-                                const advertisement         = _.pick(advertisementRequest, [
-                                    'advertisement_guid',
-                                    'advertisement_url',
-                                    'bid_impression_mlx',
-                                    'count_impression',
-                                    'expiration'
-                                ]);
-                                advertisement['attributes'] = [];
+
+                                let advertisement = advertisementMap[advertisementRequest.advertisement_guid];
+                                if (!advertisement) {
+                                    advertisement = _.pick(advertisementRequest, [
+                                        'advertisement_guid',
+                                        'advertisement_url',
+                                        'bid_impression_mlx',
+                                        'count_impression',
+                                        'expiration'
+                                    ]);
+
+                                    advertisement['attributes'] = [];
+                                    advertisementMap[advertisement.advertisement_guid] = advertisement;
+                                }
 
                                 ledgerEntry.advertisement_list.push(advertisement);
-                                advertisementMap[advertisement.advertisement_guid] = advertisement;
                             });
 
                             const normalizationRepository = database.getRepository('normalization');
