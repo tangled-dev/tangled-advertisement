@@ -58,27 +58,35 @@ class _NJMykmvfNICmggfT extends Endpoint {
                         return Promise.reject({message: 'strict_domain_request_error'});
                     }
 
-                    return consumerRepository.getRandomAdvertisementNetworkAdvertisement(
-                        webmasterGUID,
-                        webmasterTargetGUID,
-                        webmasterTargetIpAddress,
-                        webmasterTargetLanguage || 'unknown'
-                    ).then(advertisement => {
-                        advertisement = _.pick(advertisement, [
-                            'advertisement_guid',
-                            'advertisement_url',
-                            'bid_impression_mlx',
-                            'attributes',
-                            'webmaster_target_guid',
-                            'webmaster_queue_guid'
-                        ]);
-                        res.send(advertisement);
-                        if (!!webmaster.webmaster_callback_url) {
-                            Client.sendPost(webmaster.webmaster_callback_url, advertisement)
-                                  .then(_ => _)
-                                  .catch(_ => _);
-                        }
-                    });
+                    const fetchAd = () => {
+                        return consumerRepository.getRandomAdvertisementNetworkAdvertisement(
+                            webmasterGUID,
+                            webmasterTargetGUID,
+                            webmasterTargetIpAddress,
+                            webmasterTargetLanguage || 'unknown'
+                        ).then(advertisement => {
+                            if (advertisement.attributes.length === 0) {
+                                return consumerRepository.updateAdvertisementNetworkQueue({status: 0}, {advertisement_guid: advertisement.advertisement_guid})
+                                                         .then(() => fetchAd())
+                                                         .catch(() => fetchAd());
+                            }
+                            advertisement = _.pick(advertisement, [
+                                'advertisement_guid',
+                                'advertisement_url',
+                                'bid_impression_mlx',
+                                'attributes',
+                                'webmaster_target_guid',
+                                'webmaster_queue_guid'
+                            ]);
+                            res.send(advertisement);
+                            if (!!webmaster.webmaster_callback_url) {
+                                Client.sendGet(`${webmaster.webmaster_callback_url}?p1=${JSON.stringify(advertisement)}`)
+                                      .then(_ => _)
+                                      .catch(_ => _);
+                            }
+                        });
+                    };
+                    return fetchAd();
                 }).catch((e) => res.status(400).send({
                     api_status : 'fail',
                     api_message: `${e?.message || e}`
