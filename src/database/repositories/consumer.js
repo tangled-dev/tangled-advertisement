@@ -386,7 +386,10 @@ export default class Consumer {
                                FROM advertisement_consumer.advertisement_attribute
                                WHERE advertisement_guid NOT IN
                                      (SELECT advertisement_guid
-                                      FROM advertisement_consumer.advertisement_queue)`, (err) => {
+                                      FROM advertisement_consumer.advertisement_queue
+                                      UNION ALL
+                                      SELECT advertisement_guid
+                                      FROM advertisement_consumer.advertisement_network_queue)`, (err) => {
                 if (err) {
                     console.log('[database] error', err);
                     return reject(err);
