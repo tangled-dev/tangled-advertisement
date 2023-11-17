@@ -53,7 +53,14 @@ export class Client {
                 },
                 function(error, response, body) {
                     if (!error && response.statusCode === 200) {
-                        resolve(typeof body === 'string' ? JSON.parse(body) : body);
+                        if (typeof body === 'string') {
+                            try {
+                                body = JSON.parse(body);
+                            }
+                            catch (e) {
+                            }
+                        }
+                        resolve(body);
                     }
                     else {
                         reject(error && error.message || JSON.parse(body));
