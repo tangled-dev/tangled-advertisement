@@ -45,7 +45,7 @@
     "public-ip": "^4.0.4",
     "request": "^2.88.2",
     "secp256k1": "^3.6.2",
-    "sqlite3": "^5.1.2",
+    "sqlite3": "^5.1.7",
     "thirty-two": "^1.0.2",
     "utf-8-validate": "^5.0.5",
     "uuid": "^8.3.2",
