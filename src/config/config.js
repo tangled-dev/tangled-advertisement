@@ -28,27 +28,27 @@ export const ADVERTISEMENT_PROVIDER     = undefined;
 
 export const NODE_INITIAL_LIST         = [
     {
-        host: '12.90.56.102',
+        host: '12.79.200.10',
         port: 25550
     },
     {
-        host: '12.90.56.102',
+        host: '12.79.200.10',
         port: 25551
     },
     {
-        host: '12.90.56.102',
+        host: '12.79.200.10',
         port: 25552
     },
     {
-        host: '12.90.56.102',
+        host: '12.79.200.10',
         port: 25553
     },
     {
-        host: '12.90.56.102',
+        host: '12.79.200.10',
         port: 25555
     },
     {
-        host: '12.90.56.102',
+        host: '12.79.200.10',
         port: 25556
     }
 ];

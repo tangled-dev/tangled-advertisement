@@ -11,6 +11,7 @@ class _ConfigLoader {
         this.reservedConfigNameList = new Set([
             'DATABASE_CONNECTION',
             'TRANSACTION_OUTPUT_MAX',
+            'NODE_INITIAL_LIST',
         ]);
     }
 
