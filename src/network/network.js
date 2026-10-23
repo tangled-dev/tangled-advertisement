@@ -296,7 +296,7 @@ class Network {
                     return callback();
                 }
 
-                this._connectTo(node.node_prefix, node.node_address, node.node_port, node.node_port_api, node.node_id)
+                this._connectTo(node.node_prefix, node.node_address, node.node_port, node.node_id)
                     .then(() => setTimeout(callback, 1000))
                     .catch(() => setTimeout(callback, 1000));
             }, () => resolve());

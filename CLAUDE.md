@@ -96,7 +96,7 @@ Most modules are singletons (`export default new X()`) that talk to each other t
   - `registeredClients` holds the first socket of each node. Every broadcast goes through it.
 - **Peer gossip:** on `peer_connection`, `peer.sendPeerList` sends the new peer a `new_peer` message for every connected peer, and `notifyNewPeer` announces the new peer to everyone else. The per-connection cache `peer_list_<connectionID>` suppresses repeats, and re-announcements happen at most once every 10 minutes.
 - **Reconnection:** every 10s, `retryConnectToInactiveNodes` (all known but disconnected nodes) and `retryConnectToOnlineNodes` (gossiped nodes seen in the last 10 minutes) dial up to 4 nodes at a time. After 10 failed dials, an address is skipped for 10 minutes.
-- **Which peers get dialed:** `addNode` ignores a non-provider peer unless this node is itself a provider. `NODE_INITIAL_LIST` entries are always added. Because of the `_onNewPeer` bug listed under [Known quirks](#known-quirks), **a pure consumer only ever dials the boot nodes in `NODE_INITIAL_LIST`**. Providers dial everything they hear about.
+- **Which peers get dialed:** `addNode` ignores a non-provider peer unless this node is itself a provider. `NODE_INITIAL_LIST` entries are always added. Nodes reloaded from the `node` table at startup are added with no provider flag, so only providers redial them. As a result, **a pure consumer dials the boot nodes plus any provider it hears about through `new_peer`**. Providers dial everything they hear about.
 - The result is that consumers hang off providers and providers mesh with each other. A consumer↔consumer link never survives the handshake.
 
 ### Routing: flood requests, return responses by reverse path (`peer.js`)
@@ -125,7 +125,7 @@ Most modules are singletons (`export default new X()`) that talk to each other t
       - `device_id` or `protocol_address_key_identifier` is missing;
       - the key identifier is for the wrong network. Mainnet requires it to start with `1`, and `MODE_TEST` requires the opposite.
    2. **Selects** every active ad that has no active `advertisement_request_log` row for this consumer node or device (`syncAdvertisementToConsumer`). So **each ad goes to a given consumer at most once** until its log row is deactivated.
-   3. **Enforces the IP cap and checks the IP.** It serves nothing to an IP that already has `ADS_TRANSACTION_IP_MAX` (8) active log rows for any one ad. It also validates the consumer IP against `EXTERNAL_API_IP_CHECK`.
+   3. **Enforces the IP cap and checks the IP.** It serves nothing to an IP that already has `ADS_TRANSACTION_IP_MAX` (8) active log rows for any one ad. It also validates the consumer IP against `EXTERNAL_API_IP_CHECK`, and caches the result per IP for 12 hours in `_ipAddressesValidation`.
    4. **Logs and replies.** It writes one request-log row per ad, then sends back `advertisement_new` with the full ad objects, their attributes, and its own `node_id`, IP and port.
 
    The consumer (`_onNewAdvertisement`) inserts each ad with `bid_impression_mlx ≥ ADS_TRANSACTION_AMOUNT_MIN` into `advertisement_consumer.advertisement_queue`, with `creative_request_guid = request_guid`.
@@ -170,13 +170,6 @@ Every recurring job is scheduled in `peer.initialize()` and `network.initialize(
 2. Register a handler with `eventBus.on(type, …)` in `peer.initialize()`.
 3. In the handler, call `shouldBlockMessage` first and record the `message_guid` in `_messageQueue`.
 4. If the message expects a reply, add a proxy-queue entry so the reply can find its way back.
-
-### Known quirks
-These are bugs in the current code. Don't copy the patterns, and fix them deliberately if you touch the code.
-- **`_onNewPeer`** reads `peer.advertisementProvider`, but the `new_peer` payload key is `advertisement_provider`. As a result, non-provider nodes ignore every gossiped peer.
-- **`retryConnectToOnlineNodes`** passes `node.node_port_api` as the 4th argument of `_connectTo(prefix, ip, port, id)`, so the node-id check is skipped for those dials.
-- **`_onAdvertisementRequest`:** the IP-check callback redeclares `data` as the HTTP response. The validation cache `_ipAddressesValidation` is therefore keyed by the wrong value and never hits, so the external IP check runs on every request.
-- **`_onAdvertisementNetworkAdvertisementRequest`:** a failed `sendTransaction` rejects with `data.api_message` (the request) instead of `paymentData.api_message`.
 
 ## Code style
 

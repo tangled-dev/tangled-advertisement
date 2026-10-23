@@ -69,6 +69,7 @@ export class Peer {
         this._pruneMessageQueue(this._advertisementRequestQueue);
         this._pruneMessageQueue(this._messageQueue);
         this._pruneMessageQueue(this._advertisementSyncQueue);
+        this._pruneMessageQueue(this._ipAddressesValidation);
         _.forEach(this._deviceMessageQueue, message => this._pruneMessageQueue(message));
     }
 
@@ -222,7 +223,7 @@ export class Peer {
             from   : ws.node
         });
 
-        network.addNode(peer.node_prefix, peer.node_address, peer.node_port, peer.node_id, true, peer.advertisementProvider);
+        network.addNode(peer.node_prefix, peer.node_address, peer.node_port, peer.node_id, true, peer.advertisement_provider);
     }
 
     _onAdvertisementSyncRequest(data, ws) {
@@ -322,12 +323,12 @@ export class Peer {
                                                                             adCount
                                                                         ]) : [advertisements])
                             .then(([advertisements, adCount]) => {
-                                let isValidIP = this._ipAddressesValidation[data.node_ip_address];
-                                if (!_.isUndefined(isValidIP)) {
+                                const ipAddressValidation = this._ipAddressesValidation[data.node_ip_address];
+                                if (ipAddressValidation) {
                                     return Promise.resolve([
                                         advertisements,
                                         adCount,
-                                        isValidIP
+                                        ipAddressValidation.is_valid
                                     ]);
                                 }
                                 // check ip address
@@ -341,9 +342,13 @@ export class Peer {
                                         (error, response, body) => {
                                             if (!error && response.statusCode === 200) {
                                                 try {
-                                                    const data                                        = JSON.parse(body);
-                                                    const isValid                                     = !!data.is_valid;
-                                                    this._ipAddressesValidation[data.node_ip_address] = isValid;
+                                                    const ipCheckResult                               = JSON.parse(body);
+                                                    const isValid                                     = !!ipCheckResult.is_valid;
+                                                    this._ipAddressesValidation[data.node_ip_address] = {
+                                                        timestamp: ntp.now(),
+                                                        ttl      : 43200000, // 12 hours
+                                                        is_valid : isValid
+                                                    };
                                                     return resolve([
                                                         advertisements,
                                                         adCount,
@@ -519,7 +524,7 @@ export class Peer {
                                                                        }).then(paymentData => {
                                                                            console.log('[peer] payment done:', paymentData);
                                                                            if (paymentData.api_status !== 'success') {
-                                                                               return Promise.reject(data.api_message);
+                                                                               return Promise.reject(paymentData.api_message);
                                                                            }
                                                                            const transaction = paymentData.transaction[paymentData.transaction.length - 1];
                                                                            return advertiserRepository.updateAdvertisementLedgerWithPayment(transaction, [
