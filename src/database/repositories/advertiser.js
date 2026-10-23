@@ -90,20 +90,13 @@ export default class Advertiser {
                         return reject(err);
                     }
 
-                    if (advertisement.status === 1) {
-                        this.advertisementGUIDCache.add(advertisement.advertisement_guid);
-                    }
-                    else {
-                        this.advertisementGUIDCache.delete(advertisement.advertisement_guid);
-                    }
+                    // the cache holds every advertisement owned by this node, whatever its status
+                    this.advertisementGUIDCache.add(advertisement.advertisement_guid);
                     resolve();
                 });
             });
 
-        }).catch(e => res.send({
-            api_status : 'fail',
-            api_message: `unexpected generic api error: (${e})`
-        }));
+        });
     }
 
     listCategory(where) {
@@ -153,7 +146,7 @@ export default class Advertiser {
         return this.getCategory({advertisement_category_guid: categoryGuid});
     }
 
-    syncAdvertisementToConsumer(consumerGUID, deviceGUID) {
+    syncAdvertisementToConsumer(consumerGUID, deviceGUID, ipAddress) {
         return new Promise((resolve, reject) => {
             this.database.all(`SELECT *
                                FROM advertisement_advertiser.advertisement
@@ -167,9 +160,18 @@ export default class Advertiser {
                                       FROM advertisement_advertiser.advertisement_request_log
                                       WHERE tangled_guid_device = ?
                                         AND status = 1)
+                                 AND advertisement_guid NOT IN
+                                     (SELECT advertisement_guid
+                                      FROM advertisement_advertiser.advertisement_request_log
+                                      WHERE ip_address_consumer = ?
+                                        AND status = 1
+                                      GROUP BY advertisement_guid
+                                      HAVING count(1) >= ?)
                                  AND status = 1`, [
                 consumerGUID,
-                deviceGUID
+                deviceGUID,
+                ipAddress,
+                config.ADS_TRANSACTION_IP_MAX
             ], (err, data) => {
                 if (err) {
                     return reject(err);
@@ -188,7 +190,12 @@ export default class Advertiser {
                                                    USING (advertisement_guid)
                                WHERE r.tangled_guid_consumer = ?
                                  AND r.status = 1
-                                 AND a.status = 1`, [consumerGUID], (err, data) => {
+                                 AND a.status = 1
+                                 AND NOT EXISTS(SELECT 1 -- paid ads are not synced, so a consumer never re-adds an ad it already pruned
+                                                FROM advertisement_advertiser.advertisement_ledger l
+                                                WHERE l.advertisement_guid = r.advertisement_guid
+                                                  AND l.advertisement_request_guid = r.advertisement_request_guid
+                                                  AND l.tx_address_deposit_vout_md5 IS NOT NULL)`, [consumerGUID], (err, data) => {
                 if (err) {
                     return reject(err);
                 }
@@ -906,14 +913,65 @@ export default class Advertiser {
         });
     }
 
-    getThrottledIpAddresses(maxAdvertisementByIpAddress) {
+    _runInBatches(sql, parameters, batchSize = 10000) {
+        // the statement must end with "LIMIT ?". each batch is a separate statement, so other queries can run in between
         return new Promise((resolve, reject) => {
-            this.database.all(`select distinct ip_address_consumer
-                               from advertisement_request_log
-                               where status = 1
-                               group by advertisement_guid, ip_address_consumer
-                               having count(1) >= ?`,
-                [maxAdvertisementByIpAddress],
+            let total      = 0;
+            const runBatch = () => {
+                this.database.run(sql, [
+                    ...parameters,
+                    batchSize
+                ], function(err) {
+                    if (err) {
+                        console.log('[database] error', err);
+                        return reject(err);
+                    }
+
+                    total += this.changes;
+                    if (this.changes < batchSize) {
+                        return resolve(total);
+                    }
+                    setImmediate(runBatch);
+                });
+            };
+            runBatch();
+        });
+    }
+
+    expireAdvertisementRequestLog(timestamp) {
+        // a log with a pending payment stays active, so the payment can still be settled
+        return this._runInBatches(`UPDATE advertisement_advertiser.advertisement_request_log
+                                   SET status = 0
+                                   WHERE log_id IN (SELECT r.log_id
+                                                    FROM advertisement_advertiser.advertisement_request_log r
+                                                    WHERE r.status = 1
+                                                      AND r.create_date <= ?
+                                                      AND NOT EXISTS(SELECT 1
+                                                                     FROM advertisement_advertiser.advertisement_ledger l
+                                                                     WHERE l.advertisement_guid = r.advertisement_guid
+                                                                       AND l.advertisement_request_guid = r.advertisement_request_guid
+                                                                       AND l.tx_address_deposit_vout_md5 IS NULL)
+                                                    LIMIT ?)`, [timestamp]);
+    }
+
+    pruneAdvertisementRequestLog(timestamp) {
+        return this._runInBatches(`DELETE
+                                   FROM advertisement_advertiser.advertisement_request_log
+                                   WHERE log_id IN (SELECT log_id
+                                                    FROM advertisement_advertiser.advertisement_request_log
+                                                    WHERE status = 0
+                                                      AND create_date <= ?
+                                                    LIMIT ?)`, [timestamp]);
+    }
+
+    listAdvertisementSpend(timestamp) {
+        return new Promise((resolve, reject) => {
+            this.database.all(`SELECT advertisement_guid, SUM(withdrawal) AS spend_mlx
+                               FROM advertisement_advertiser.advertisement_ledger
+                               WHERE advertisement_guid IS NOT NULL
+                                 AND create_date >= ?
+                               GROUP BY advertisement_guid`,
+                [timestamp],
                 (err, data) => {
                     if (err) {
                         console.log('[database] error', err);
@@ -921,26 +979,6 @@ export default class Advertiser {
                     }
 
                     resolve(data);
-                });
-        });
-    }
-
-    getAdvertisementCountByIpAddress(ipAddress) {
-        return new Promise((resolve, reject) => {
-            this.database.get(`select max(ad_count) as ad_count
-                               from (select count(1) as ad_count
-                                     from advertisement_request_log
-                                     where status = 1
-                                       and ip_address_consumer = ?
-                                     group by advertisement_guid)`,
-                [ipAddress],
-                (err, data) => {
-                    if (err) {
-                        console.log('[database] error', err);
-                        return reject(err);
-                    }
-
-                    resolve(data.ad_count);
                 });
         });
     }

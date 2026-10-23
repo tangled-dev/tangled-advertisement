@@ -22,6 +22,8 @@ export const ADS_TRANSACTION_IP_MAX      = 8; /* maximum number of ads paid to a
 export const ADS_TRANSACTION_AMOUNT_MIN = 1000;
 export const ADS_TRANSACTION_AMOUNT_MAX = 999999999;
 export const ADS_PRUNE_AGE              = 86400; // 1 day old
+export const ADS_REQUEST_LOG_EXPIRATION = 86400; /* an ad can be served again to the same consumer after 1 day */
+export const ADS_REQUEST_LOG_RETENTION  = 604800; /* expired request logs are deleted after 7 days */
 export const MILLIX_USD_VALUE           = 100000000 / 56; /*TODO: get this from an external api like fiatleak*/
 
 export const ADVERTISEMENT_PROVIDER     = undefined;
@@ -64,7 +66,7 @@ if (DATABASE_ENGINE === 'sqlite') {
     DATABASE_CONNECTION.FILENAME_ADVERTISER_ADVERTISEMENT = 'tangled-advertisement-advertiser.sqlite';
     DATABASE_CONNECTION.FILENAME_CONSUMER_ADVERTISEMENT   = 'tangled-advertisement-consumer.sqlite';
     DATABASE_CONNECTION.FILENAME_MILLIX_NODE              = 'millix.sqlite';
-    DATABASE_CONNECTION.SCHEMA_VERSION                    = '12';
+    DATABASE_CONNECTION.SCHEMA_VERSION                    = '13';
 }
 
 export default {
@@ -79,6 +81,8 @@ export default {
     ADS_TRANSACTION_IP_MAX,
     NODE_CERTIFICATE_KEY_PATH,
     ADS_TRANSACTION_AMOUNT_MAX,
+    ADS_REQUEST_LOG_EXPIRATION,
+    ADS_REQUEST_LOG_RETENTION,
     NETWORK_SHORT_TIME_WAIT_MAX,
     TRANSACTION_ADDRESS_VERSION,
     NETWORK_LONG_TIME_WAIT_MAX,

@@ -1,7 +1,6 @@
 import Endpoint from '../endpoint';
 import database from '../../database/database';
 import config from '../../config/config';
-import peer from '../../network/peer';
 
 
 /**
@@ -38,7 +37,6 @@ class _pKZdzEZrrdPA1jtl extends Endpoint {
             create_date_max   : timestamp
         })
                             .then(() => {
-                                peer.updateThrottledIpAddress();
                                 res.send({
                                     api_status : 'success',
                                     api_message: 'ad reset performed'

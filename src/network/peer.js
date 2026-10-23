@@ -23,7 +23,7 @@ export class Peer {
         this._advertisementPaymentRequestQueue      = {};
         this._advertisementRequestQueue             = {};
         this._advertisementSyncQueue                = {};
-        this._ipAddressesThrottled                  = new Set();
+        this._advertisementSpend                    = {};
         this._ipAddressesValidation                 = {};
         this._messageQueue                          = {};
         this._deviceMessageQueue                    = {};
@@ -39,7 +39,8 @@ export class Peer {
             'advertisement_not_found'          : 0,
             'advertisement_payment_created'    : 0,
             'advertisement_payment_resend'     : 0,
-            'advertisement_payment_not_created': 0
+            'advertisement_payment_not_created': 0,
+            'advertisement_budget_exhausted'   : 0
         };
     }
 
@@ -239,7 +240,7 @@ export class Peer {
             return;
         }
 
-        this.addDeviceMessage(deviceMessageQueueID, data.message_guid);
+        this.addDeviceMessage(deviceMessageQueueID, data.message_guid, 50000); // shorter than the 60s sync interval, so the next request is not dropped
 
         this.stats['advertisement_request_sync'] += 1;
 
@@ -285,8 +286,7 @@ export class Peer {
 
     _onAdvertisementRequest(data, ws) {
         data.message_guid = data.request_guid;
-        if (this._ipAddressesThrottled.has(data.node_ip_address) ||
-            !data.protocol_address_key_identifier ||
+        if (!data.protocol_address_key_identifier ||
             !data.device_id ||
             this.shouldBlockMessage(data) ||
             config.MODE_TEST === false && !data.protocol_address_key_identifier.startsWith('1') ||
@@ -299,7 +299,7 @@ export class Peer {
             return;
         }
 
-        this.addDeviceMessage(deviceMessageQueueID, data.message_guid);
+        this.addDeviceMessage(deviceMessageQueueID, data.message_guid, 50000); // shorter than the 60s request interval, so the next request is not dropped
 
         this.stats['advertisement_request'] += 1;
 
@@ -315,19 +315,13 @@ export class Peer {
         this.propagateRequest('advertisement_request', data, ws, true);
 
         const advertiserRepository = database.getRepository('advertiser');
-        advertiserRepository.syncAdvertisementToConsumer(data.node_id, data.device_id)
-                            .then(advertisements => advertisements.length > 0 ?
-                                                    advertiserRepository.getAdvertisementCountByIpAddress(data.node_ip_address)
-                                                                        .then(adCount => [
-                                                                            advertisements,
-                                                                            adCount
-                                                                        ]) : [advertisements])
-                            .then(([advertisements, adCount]) => {
+        advertiserRepository.syncAdvertisementToConsumer(data.node_id, data.device_id, data.node_ip_address)
+                            .then(advertisements => advertisements.filter(advertisement => this.hasAdvertisementBudget(advertisement)))
+                            .then(advertisements => {
                                 const ipAddressValidation = this._ipAddressesValidation[data.node_ip_address];
                                 if (ipAddressValidation) {
                                     return Promise.resolve([
                                         advertisements,
-                                        adCount,
                                         ipAddressValidation.is_valid
                                     ]);
                                 }
@@ -351,7 +345,6 @@ export class Peer {
                                                     };
                                                     return resolve([
                                                         advertisements,
-                                                        adCount,
                                                         isValid
                                                     ]);
                                                 }
@@ -362,7 +355,6 @@ export class Peer {
 
                                             resolve([
                                                 advertisements,
-                                                adCount,
                                                 true
                                             ]);
 
@@ -370,16 +362,12 @@ export class Peer {
                                     );
                                 }));
                             })
-                            .then(([advertisements, adCount, validNodeIpAddress]) => {
-                                if (advertisements.length === 0 || adCount >= config.ADS_TRANSACTION_IP_MAX || !validNodeIpAddress) {
+                            .then(([advertisements, validNodeIpAddress]) => {
+                                if (advertisements.length === 0 || !validNodeIpAddress) {
                                     return;
                                 }
 
                                 console.log(`[peer] found ${advertisements.length} new advertisements to peer ${data.node_id}`);
-
-                                if (adCount === (config.ADS_TRANSACTION_IP_MAX - 1)) {
-                                    this._ipAddressesThrottled.add(data.node_ip_address);
-                                }
 
                                 advertisements.forEach(advertisement => {
                                     advertiserRepository.logAdvertisementRequest(advertisement.advertisement_guid,
@@ -408,8 +396,7 @@ export class Peer {
 
     _onAdvertisementNetworkAdvertisementRequest(data, ws) {
         data.message_guid = data.request_guid;
-        if (this._ipAddressesThrottled.has(data.node_ip_address) ||
-            !data.protocol_address_key_identifier ||
+        if (!data.protocol_address_key_identifier ||
             !data.device_id ||
             this.shouldBlockMessage(data) ||
             config.MODE_TEST === false && !data.protocol_address_key_identifier.startsWith('1') ||
@@ -422,7 +409,7 @@ export class Peer {
             return;
         }
 
-        this.addDeviceMessage(deviceMessageQueueID, data.message_guid);
+        this.addDeviceMessage(deviceMessageQueueID, data.message_guid, 50000); // shorter than the 60s request interval, so the next request is not dropped
 
         this.stats['advertisement_network:advertisement_request'] += 1;
 
@@ -1009,23 +996,7 @@ export class Peer {
                     advertiserRepository.getAdvertisementRequestLog({
                         advertisement_request_guid: data.request_guid,
                         status                    : 1
-                    }).then(advertisementRequest => {
-                        const error   = !advertisementRequest ? 'creative_request_not_found' : 'advertisement_not_found';
-                        this.stats[error] += 1;
-                        const message = {
-                            message_guid      : Database.generateID(32),
-                            advertisement_guid: data.advertisement_guid,
-                            request_guid      : data.request_guid,
-                            device_id         : data.device_id,
-                            timestamp         : ntp.now(),
-                            advertisement     : {
-                                device_id: data.device_id
-                            },
-                            error
-                        };
-
-                        this.propagateRequest('advertisement_payment_response', message);
-                    });
+                    }).then(advertisementRequest => this._sendAdvertisementPaymentError(data, !advertisementRequest ? 'creative_request_not_found' : 'advertisement_not_found'));
                     return;
                 }
 
@@ -1075,11 +1046,19 @@ export class Peer {
                                                            return unlock();
                                                        }
 
+                                                       if (!this.hasAdvertisementBudget(advertisement)) {
+                                                           console.log(`[peer] daily budget exhausted for ${data.advertisement_guid}`);
+                                                           this._sendAdvertisementPaymentError(data, 'advertisement_budget_exhausted');
+                                                           return unlock();
+                                                       }
+
                                                        this.stats['advertisement_payment_created'] += 1;
                                                        console.log(`[peer] advertisement data for pending payment`, advertisement);
                                                        console.log(`[peer] add pending payment to request ${data.request_guid}`);
-                                                       return advertiserRepository.addAdvertisementPayment(data.advertisement_guid, data.request_guid, Math.min(config.ADS_TRANSACTION_AMOUNT_MAX, advertisement.bid_impression_mlx), 'withdrawal:external')
+                                                       const paymentAmount = Math.min(config.ADS_TRANSACTION_AMOUNT_MAX, advertisement.bid_impression_mlx);
+                                                       return advertiserRepository.addAdvertisementPayment(data.advertisement_guid, data.request_guid, paymentAmount, 'withdrawal:external')
                                                                                   .then(advertisementLedgerData => {
+                                                                                      this._advertisementSpend[data.advertisement_guid] = (this._advertisementSpend[data.advertisement_guid] || 0) + paymentAmount;
                                                                                       this.paymentBacklogSize += 1;
                                                                                       if (this.paymentBacklogSize >= config.TRANSACTION_OUTPUT_MAX) {
                                                                                           this.processAdvertisementPayment();
@@ -1094,6 +1073,23 @@ export class Peer {
             });
 
         });
+    }
+
+    _sendAdvertisementPaymentError(data, error) {
+        this.stats[error] += 1;
+        const message = {
+            message_guid      : Database.generateID(32),
+            advertisement_guid: data.advertisement_guid,
+            request_guid      : data.request_guid,
+            device_id         : data.device_id,
+            timestamp         : ntp.now(),
+            advertisement     : {
+                device_id: data.device_id
+            },
+            error
+        };
+
+        this.propagateRequest('advertisement_payment_response', message);
     }
 
     _onAdvertisementPaymentResponse(data) {
@@ -1285,14 +1281,38 @@ export class Peer {
                                    .then(pendingPaymentCount => this.paymentBacklogSize = pendingPaymentCount);
     }
 
-    updateThrottledIpAddress() {
+    updateAdvertisementSpend() {
         const advertiserRepository = database.getRepository('advertiser');
-        advertiserRepository.getThrottledIpAddresses(config.ADS_TRANSACTION_IP_MAX)
-                            .then(throttledIpAddressList => {
-                                this._ipAddressesThrottled.clear();
-                                throttledIpAddressList.forEach(ipAddress => this._ipAddressesThrottled.add(ipAddress));
-                            })
-                            .catch(_ => _);
+        const oneDayAgo            = Math.floor(Date.now() / 1000) - 86400;
+        return advertiserRepository.listAdvertisementSpend(oneDayAgo)
+                                   .then(spendList => {
+                                       const advertisementSpend = {};
+                                       spendList.forEach(item => advertisementSpend[item.advertisement_guid] = item.spend_mlx);
+                                       this._advertisementSpend = advertisementSpend;
+                                   })
+                                   .catch(_ => _);
+    }
+
+    hasAdvertisementBudget(advertisement) {
+        if (!(advertisement.budget_daily_mlx > 0)) { // no daily budget set
+            return true;
+        }
+        const spend = this._advertisementSpend[advertisement.advertisement_guid] || 0;
+        return spend + advertisement.bid_impression_mlx <= advertisement.budget_daily_mlx;
+    }
+
+    expireAdvertisementRequestLog() {
+        const advertiserRepository = database.getRepository('advertiser');
+        return advertiserRepository.expireAdvertisementRequestLog(Math.floor(Date.now() / 1000) - config.ADS_REQUEST_LOG_EXPIRATION)
+                                   .then(count => console.log(`[peer] expired ${count} advertisement request logs`))
+                                   .catch(_ => _);
+    }
+
+    pruneAdvertisementRequestLog() {
+        const advertiserRepository = database.getRepository('advertiser');
+        return advertiserRepository.pruneAdvertisementRequestLog(Math.floor(Date.now() / 1000) - config.ADS_REQUEST_LOG_RETENTION)
+                                   .then(count => console.log(`[peer] pruned ${count} expired advertisement request logs`))
+                                   .catch(_ => _);
     }
 
     sendAdvertisementPaymentRequest(advertisement) {
@@ -1397,7 +1417,9 @@ export class Peer {
         task.scheduleTask('advertiser-pending-payment-prune', () => this.pruneAdvertiserPendingPaymentQueue(), 30000);
         task.scheduleTask('advertisement-queue-prune', () => this.pruneConsumerAdvertisementQueue(), 30000);
         task.scheduleTask('advertisement-queue-process', () => this.processAdvertisementQueue(), 30000, true);
-        task.scheduleTask('node-update-throttled-ip-address', () => this.updateThrottledIpAddress(), 60000);
+        task.scheduleTask('advertisement-spend-update', () => this.updateAdvertisementSpend(), 60000);
+        task.scheduleTask('advertisement-request-log-expire', () => this.expireAdvertisementRequestLog(), 60000, true);
+        task.scheduleTask('advertisement-request-log-prune', () => this.pruneAdvertisementRequestLog(), 3600000, true);
         task.scheduleTask('node-prune-message', () => this.clearMessageQueues(), 5000);
         task.scheduleTask('stats', () => this.showStats(), 10000);
         // ad network
@@ -1420,7 +1442,7 @@ export class Peer {
                                              this.protocolAddressKeyIdentifier = data.wallet.address_key_identifier;
                                              return machineId().then(deviceID => {
                                                  this.deviceID = deviceID;
-                                                 this.updateThrottledIpAddress();
+                                                 this.updateAdvertisementSpend();
                                              });
 
                                          }
@@ -1460,7 +1482,9 @@ export class Peer {
         task.removeTask('advertisement-payment-process');
         task.removeTask('advertisement-queue-prune');
         task.removeTask('advertisement-queue-process');
-        task.removeTask('node-update-throttled-ip-address');
+        task.removeTask('advertisement-spend-update');
+        task.removeTask('advertisement-request-log-expire');
+        task.removeTask('advertisement-request-log-prune');
         task.removeTask('advertisement-network:check-payment');
         task.removeTask('advertisement-network:webmaster-advertisement-payment-process');
         task.removeTask('advertisement-network:request-advertisement');

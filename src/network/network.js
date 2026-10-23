@@ -132,6 +132,7 @@ class Network {
                 ws.nodeIPAddress   = ipAddress;
                 ws.lastMessageTime = ws.createTime;
                 ws.outBound        = true;
+                ws.isAlive         = true;
                 console.log('[network outgoing] connected to ' + url + ', host ' + ws.nodeIPAddress);
 
                 this._doHandshake(ws);
@@ -173,6 +174,7 @@ class Network {
             });
 
             ws.on('message', this._onWebsocketMessage.bind(this, ws));
+            ws.on('pong', () => ws.isAlive = true);
             console.log('[network outgoing] connecting to node', url);
 
         });
@@ -185,6 +187,7 @@ class Network {
         }
 
         ws.lastMessageTime = Date.now();
+        ws.isAlive         = true;
 
         let jsonMessage;
 
@@ -233,11 +236,13 @@ class Network {
             ws.createTime      = Date.now();
             ws.lastMessageTime = ws.createTime;
             ws.inBound         = true;
+            ws.isAlive         = true;
 
             console.log('[network income] got connection from ' + ws.node + ', host ' + ip);
 
 
             ws.on('message', this._onWebsocketMessage.bind(this, ws));
+            ws.on('pong', () => ws.isAlive = true);
 
             ws.on('close', () => {
                 console.log('[network income] client ' + ws.node + ' disconnected');
@@ -273,7 +278,8 @@ class Network {
                 .listNodes()
                 .then((nodes) => {
                     async.eachSeries(_.shuffle(nodes), (node, callback) => {
-                        this.addNode(node.node_prefix, node.node_address, node.node_port, node.node_id);
+                        // nodes are stored only after passing the handshake, so a consumer stored them as providers
+                        this.addNode(node.node_prefix, node.node_address, node.node_port, node.node_id, false, true);
                         callback();
                     }, () => {
                         this.retryConnectToInactiveNodes().then(_ => _).catch(_ => _);
@@ -328,14 +334,57 @@ class Network {
     }
 
 
+    _checkConnectionHeartbeat() {
+        _.each(_.flatten(_.values(this._nodeRegistry)), ws => {
+            if (ws.isAlive === false) {
+                console.log('[network] closing unresponsive connection to ' + ws.node);
+                ws.terminate();
+                return;
+            }
+
+            ws.isAlive = false;
+            try {
+                ws.ping();
+            }
+            catch (e) {
+                ws.terminate();
+            }
+        });
+    }
+
+    refreshAdvertisementProvider() {
+        return database.getRepository('advertiser').countAdvertisement().then(countAdvertisement => {
+            cache.setCacheItem('network', 'advertisement_count', countAdvertisement);
+            const advertisementProvider = !!(config.ADVERTISEMENT_PROVIDER || countAdvertisement > 0);
+            if (advertisementProvider === !!this.advertisementProvider) {
+                return;
+            }
+
+            console.log('[network] advertisement provider status changed to ' + advertisementProvider);
+            this.advertisementProvider = advertisementProvider;
+            const payload              = JSON.stringify({
+                type   : 'node_update',
+                content: {
+                    node_id               : this.nodeID,
+                    advertisement_provider: advertisementProvider
+                }
+            });
+            _.each(_.flatten(_.values(this._nodeRegistry)), ws => {
+                try {
+                    ws.send(payload);
+                }
+                catch (e) {
+                    console.log('[network] error sending node update to ' + ws.node);
+                }
+            });
+        }).catch(_ => _);
+    }
+
     _doHandshake(ws) {
         const countAdvertisement = cache.getCacheItem('network', 'advertisement_count');
         let promise;
         if (countAdvertisement === null) {
-            promise = database.getRepository('advertiser').countAdvertisement().then(countAdvertisement => {
-                cache.setCacheItem('network', 'advertisement_count', countAdvertisement);
-                this.advertisementProvider = config.ADVERTISEMENT_PROVIDER || countAdvertisement > 0;
-            });
+            promise = this.refreshAdvertisementProvider(); // notifies connected peers if the status changed
         }
         else {
             promise = Promise.resolve();
@@ -377,6 +426,10 @@ class Network {
         // drop connection if both nodes are not advertisement providers
         if (!this.advertisementProvider && !ws.advertisementProvider) {
             console.log('[network] closing connection. both nodes are not advertisement providers');
+            if (ws.outBound) { // stop redialing a node this node cannot connect to
+                delete this._nodeList[ws.node];
+                delete this._nodeListOnline[ws.node];
+            }
             ws.terminate();
             return;
         }
@@ -427,6 +480,21 @@ class Network {
             }
 
             eventBus.emit('peer_connection', ws);
+        }
+    }
+
+    _onNodeUpdate(content, ws) {
+        if (!ws.nodeID || content?.node_id !== ws.nodeID) {
+            return;
+        }
+
+        const advertisementProvider = !!content.advertisement_provider;
+        console.log('[network] node ' + ws.nodeID + ' advertisement provider status is ' + advertisementProvider);
+        _.each(this._nodeRegistry[ws.nodeID], nodeWS => nodeWS.advertisementProvider = advertisementProvider);
+
+        if (!this.advertisementProvider && !advertisementProvider) {
+            console.log('[network] closing connection. both nodes are not advertisement providers');
+            _.each(_.clone(this._nodeRegistry[ws.nodeID]), nodeWS => nodeWS.terminate());
         }
     }
 
@@ -560,6 +628,7 @@ class Network {
                                        this.connectToNodes();
                                        this.initialized = true;
                                        eventBus.on('node_handshake', this._onNodeHandshake.bind(this));
+                                       eventBus.on('node_update', this._onNodeUpdate.bind(this));
                                    });
                     });
     }
@@ -595,6 +664,8 @@ class Network {
                 task.scheduleTask('network_reconnect', () => this.retryConnectToInactiveNodes(), 10000);
                 task.scheduleTask('retry_connect_online_node', this.retryConnectToOnlineNodes.bind(this), 10000, true);
                 task.scheduleTask('check_valid_public_ip_address', () => this.checkIsValidPublicIpAddress(), 180000);
+                task.scheduleTask('connection_heartbeat', () => this._checkConnectionHeartbeat(), 30000);
+                task.scheduleTask('refresh_advertisement_provider', () => this.refreshAdvertisementProvider(), 30000, true);
             }).catch(e => console.log('[network] err', e));
         }).catch(() => {
             setTimeout(() => this.initialize(), 1000);
@@ -611,9 +682,12 @@ class Network {
 
     stop() {
         eventBus.removeAllListeners('node_handshake');
+        eventBus.removeAllListeners('node_update');
         task.removeTask('network_reconnect');
         task.removeTask('retry_connect_online_node');
         task.removeTask('check_valid_public_ip_address');
+        task.removeTask('connection_heartbeat');
+        task.removeTask('refresh_advertisement_provider');
 
         this.initialized = false;
         this.stopWebSocket();
