@@ -20,6 +20,19 @@ class Cache {
         });
     }
 
+    // returns the entry only while it is live, so expiry holds even if the purge job is not running
+    _getCacheEntry(store, key) {
+        const entry = this.cache[store] && this.cache[store][key];
+        if (!entry) {
+            return null;
+        }
+        if (Date.now() > entry.purge_time) {
+            delete this.cache[store][key];
+            return null;
+        }
+        return entry;
+    }
+
     removeCacheItem(store, key) {
         if (this.cache[store] && this.cache[store][key]) {
             delete this.cache[store][key];
@@ -27,8 +40,9 @@ class Cache {
     }
 
     refreshCacheTime(store, key, cacheTime = 30000) {
-        if (this.cache[store] && this.cache[store][key]) {
-            this.cache[store][key].purge_time = Date.now() + cacheTime;
+        const entry = this._getCacheEntry(store, key);
+        if (entry) {
+            entry.purge_time = Date.now() + cacheTime;
         }
     }
 
@@ -52,22 +66,22 @@ class Cache {
     }
 
     getCacheItem(store, key) {
-        if (this.cache[store] && this.cache[store][key]) {
-            return this.cache[store][key].value;
-        }
-        return null;
+        const entry = this._getCacheEntry(store, key);
+        return entry ? entry.value : null;
     }
 
     initialize() {
         if (this.initialized) {
             if (!this.jobRunning) {
                 task.scheduleTask('cache_purge', this._purgeCache.bind(this), 30000);
+                this.jobRunning = true;
             }
             return Promise.resolve();
         }
 
         this.initialized = true;
         task.scheduleTask('cache_purge', this._purgeCache.bind(this), 30000);
+        this.jobRunning = true;
         return Promise.resolve();
     }
 

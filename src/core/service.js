@@ -26,25 +26,26 @@ class Service {
             return Promise.resolve();
         }
         this.initialized = true;
-        return database.initialize()
-                       .then(() => configLoader.load())
-                       .then(() => database.checkup())
-                       .then(() => {
-                           task.scheduleTask('mlx_price_update', () => this.updateMLXUSDPrice(), 60000);
-                           return this.updateMLXUSDPrice();
-                       })
-                       .then(() => ntp.initialize())
-                       .then(() => peer.initialize())
-                       .then(() => network.initialize(peer.protocolAddressKeyIdentifier))
-                       .then(() => api.initialize())
-                       .catch(e => {
-                           console.log(`[service] ${e && (e.message || e.api_message) || e}`);
-                           peer.stop();
-                           network.stop();
-                           api.stop();
-                           this.initialized = false;
-                           return new Promise(resolve => setTimeout(() => this.initialize(options).then(resolve), 5000));
-                       });
+        return cache.initialize()
+                    .then(() => database.initialize())
+                    .then(() => configLoader.load())
+                    .then(() => database.checkup())
+                    .then(() => {
+                        task.scheduleTask('mlx_price_update', () => this.updateMLXUSDPrice(), 60000);
+                        return this.updateMLXUSDPrice();
+                    })
+                    .then(() => ntp.initialize())
+                    .then(() => peer.initialize())
+                    .then(() => network.initialize(peer.protocolAddressKeyIdentifier))
+                    .then(() => api.initialize())
+                    .catch(e => {
+                        console.log(`[service] ${e && (e.message || e.api_message) || e}`);
+                        peer.stop();
+                        network.stop();
+                        api.stop();
+                        this.initialized = false;
+                        return new Promise(resolve => setTimeout(() => this.initialize(options).then(resolve), 5000));
+                    });
     }
 
     stop() {
